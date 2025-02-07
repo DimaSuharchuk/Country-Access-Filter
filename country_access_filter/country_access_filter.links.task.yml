@@ -1,0 +1,5 @@
+country_access_filter.settings_tab:
+  route_name: country_access_filter.settings
+  base_route: country_access_filter.admin
+  title: Settings
+  weight: 1

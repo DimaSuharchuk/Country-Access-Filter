@@ -1,0 +1,19 @@
+{
+  "name": "dimasuharchuk/country-access-filter",
+  "description": "A custom Drupal module for country-based access filtering.",
+  "type": "drupal-module",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Dima Sukharchuk",
+      "email": "suharchuk.dima@gmail.com"
+    }
+  ],
+  "require": {
+    "php": ">=8.1",
+    "drupal/core": "^10 || ^11"
+  },
+  "extra": {
+    "installer-name": "country_access_filter"
+  }
+}

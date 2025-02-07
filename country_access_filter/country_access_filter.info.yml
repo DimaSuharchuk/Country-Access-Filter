@@ -1,0 +1,6 @@
+type: module
+name: Country Access Filter
+description: Allows requests only from allowed countries.
+package: Custom
+core_version_requirement: ^10 || ^11
+configure: country_access_filter.admin

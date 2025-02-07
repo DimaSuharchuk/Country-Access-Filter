@@ -1,0 +1,15 @@
+# Schema for the configuration files of the country_access_filter module.
+
+country_access_filter.settings:
+  type: config_object
+  label: 'Country Access Filter settings'
+  mapping:
+    enabled:
+      type: boolean
+      label: 'Enable functionality'
+    countries:
+      type: string
+      label: 'Allowed countries'
+    debug_mode:
+      type: boolean
+      label: 'Debug mode'

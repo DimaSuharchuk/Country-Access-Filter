@@ -1,0 +1,7 @@
+country_access_filter.settings:
+  path: '/admin/country-access-filter/settings'
+  defaults:
+    _form: '\Drupal\country_access_filter\Form\CountryAccessFilterSettingsForm'
+    _title: 'Settings'
+  requirements:
+    _permission: 'administer site configuration'

@@ -1,0 +1,6 @@
+country_access_filter.admin:
+  title: Country Access Filter
+  description: 'Country Access Filter functionality.'
+  parent: system.admin
+  route_name: country_access_filter.settings
+  weight: 11
