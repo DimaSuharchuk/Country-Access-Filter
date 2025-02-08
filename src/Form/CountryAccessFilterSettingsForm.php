@@ -9,7 +9,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 
 class CountryAccessFilterSettingsForm extends ConfigFormBase {
 
-  protected Connection $db;
+  protected ?Connection $db;
 
   /**
    * {@inheritDoc}
@@ -140,11 +140,35 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state): void {
-    $this->config('country_access_filter.settings')
+    $config = $this->config('country_access_filter.settings');
+
+    $old_countries_raw = $config->get('countries');
+    $new_countries_raw = trim($form_state->getValue('countries'));
+    $old_countries = explode(' ', $old_countries_raw);
+    $new_countries = explode(' ', $new_countries_raw);
+
+    $added_countries = array_diff($new_countries, $old_countries);
+    $removed_countries = array_diff($old_countries, $new_countries);
+
+    $config
       ->set('enabled', $form_state->getValue('enabled'))
-      ->set('countries', trim($form_state->getValue('countries')))
+      ->set('countries', $new_countries_raw)
       ->set('debug_mode', $form_state->getValue('debug_mode'))
       ->save();
+
+    if ($added_countries) {
+      $this->db->update('country_access_filter_ips')
+        ->fields(['status' => 1])
+        ->condition('country_code', $added_countries, 'IN')
+        ->execute();
+    }
+
+    if ($removed_countries) {
+      $this->db->update('country_access_filter_ips')
+        ->fields(['status' => 0])
+        ->condition('country_code', $removed_countries, 'IN')
+        ->execute();
+    }
 
     parent::submitForm($form, $form_state);
   }
