@@ -1,0 +1,6 @@
+#country-access-table tr {
+    background: lightcoral;
+}
+#country-access-table tr.allowed {
+    background: lightgreen;
+}

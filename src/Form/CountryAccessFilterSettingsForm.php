@@ -35,6 +35,9 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state): array {
     $config = $this->config('country_access_filter.settings');
+    $countries_raw = $config->get('countries');
+    $countries_allowed = explode(' ', $countries_raw);
+    $countries_allowed = array_combine($countries_allowed, $countries_allowed);
 
     $form['enabled'] = [
       '#type' => 'checkbox',
@@ -46,7 +49,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       '#type' => 'textfield',
       '#title' => $this->t('Allowed countries'),
       '#description' => $this->t('Enter country codes (ISO 3166-1 alpha-2) separated by spaces.'),
-      '#default_value' => $config->get('countries'),
+      '#default_value' => $countries_raw,
       '#required' => TRUE,
     ];
 
@@ -104,10 +107,16 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
     $rows = [];
 
     foreach ($countries as $country => $count) {
-      $rows[] = [
-        'country' => $country,
-        'count' => $count,
+      $rows[$country] = [
+        'data' => [
+          'country' => $country,
+          'count' => $count,
+        ],
       ];
+
+      if (array_key_exists($country, $countries_allowed)) {
+        $rows[$country]['class'][] = 'allowed';
+      }
     }
 
     $form['info']['countries'] = [
@@ -118,6 +127,14 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       '#type' => 'table',
       '#header' => $header,
       '#rows' => $rows,
+      '#attributes' => [
+        'id' => 'country-access-table',
+      ],
+      '#attached' => [
+        'library' => [
+          'country_access_filter/style',
+        ],
+      ],
     ];
 
     return parent::buildForm($form, $form_state);
