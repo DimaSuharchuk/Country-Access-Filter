@@ -113,3 +113,13 @@ function country_access_filter_update_10002() {
     $schema->createTable($table, $spec);
   }
 }
+
+/**
+ * Remove key "Debug mode" from module config.
+ */
+function country_access_filter_update_10003() {
+  Drupal::configFactory()
+    ->getEditable('country_access_filter.settings')
+    ->clear('debug_mode')
+    ->save();
+}

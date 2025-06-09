@@ -10,6 +10,3 @@ country_access_filter.settings:
     countries:
       type: string
       label: 'Allowed countries'
-    debug_mode:
-      type: boolean
-      label: 'Debug mode'
