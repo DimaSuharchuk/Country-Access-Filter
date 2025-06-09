@@ -39,6 +39,35 @@ function country_access_filter_schema() {
     ],
   ];
 
+  $schema['country_access_404_tracker'] = [
+    'description' => 'Track IP addresses that triggered 404 responses.',
+    'fields' => [
+      'ip' => [
+        'description' => 'The IP address stored as an unsigned integer.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'first_404' => [
+        'description' => 'Timestamp of the first 404 in current window.',
+        'type' => 'int',
+        'not null' => TRUE,
+      ],
+      'count' => [
+        'description' => 'Number of 404s in current window.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 1,
+      ],
+    ],
+    'primary key' => ['ip'],
+    'indexes' => [
+      'first_404' => ['first_404'],
+    ],
+  ];
+
   return $schema;
 }
 
@@ -69,5 +98,18 @@ function country_access_filter_update_10001() {
     && !$schema->indexExists($table, $index_name)
   ) {
     $schema->addIndex($table, $index_name, $spec['indexes'][$index_name], $spec);
+  }
+}
+
+/**
+ * Create 404 tracker table to monitor and auto-ban IPs.
+ */
+function country_access_filter_update_10002() {
+  $table = 'country_access_404_tracker';
+  $spec = country_access_filter_schema()[$table];
+  $schema = Drupal::database()->schema();
+
+  if (!$schema->tableExists($table)) {
+    $schema->createTable($table, $spec);
   }
 }

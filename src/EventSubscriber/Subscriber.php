@@ -14,24 +14,15 @@ use Symfony\Component\HttpKernel\KernelEvents;
 
 class Subscriber implements EventSubscriberInterface {
 
-  protected RequestStack $request;
-
   protected ImmutableConfig $config;
 
-  protected AccountInterface $user;
-
-  private CountryAccessService $country_access;
-
   public function __construct(
-    RequestStack           $request_stack,
+    protected RequestStack $request,
     ConfigFactoryInterface $config_factory,
-    AccountInterface       $user,
-    CountryAccessService   $country_access,
+    protected AccountInterface $user,
+    protected CountryAccessService $country_access,
   ) {
-    $this->request = $request_stack;
     $this->config = $config_factory->get('country_access_filter.settings');
-    $this->user = $user;
-    $this->country_access = $country_access;
   }
 
   public static function getSubscribedEvents(): array {
@@ -52,7 +43,7 @@ class Subscriber implements EventSubscriberInterface {
 
     $ip = $this->request->getCurrentRequest()->getClientIp();
 
-    if (!$this->country_access->hasAccess($ip)) {
+    if (!$ip || !$this->country_access->hasAccess($ip)) {
       $response = new Response();
       $response->setStatusCode(Response::HTTP_SERVICE_UNAVAILABLE);
       $event->setResponse($response);

@@ -9,11 +9,27 @@ services:
     tags:
       - { name: event_subscriber }
 
+  country_access_filter.not_found_subscriber:
+    class: Drupal\country_access_filter\EventSubscriber\NotFoundSubscriber
+    arguments:
+      - '@config.factory'
+      - '@database'
+      - '@request_stack'
+      - '@logger.factory'
+      - '@country_access_filter.helper'
+    tags:
+      - { name: event_subscriber }
+
   country_access_filter.country_access_service:
     class: Drupal\country_access_filter\Service\CountryAccessService
     arguments:
       - '@database'
       - '@config.factory'
+      - '@logger.factory'
+      - '@country_access_filter.helper'
+
+  country_access_filter.helper:
+    class: Drupal\country_access_filter\Service\Helper
+    arguments:
       - '@http_client'
       - '@serialization.json'
-      - '@logger.factory'

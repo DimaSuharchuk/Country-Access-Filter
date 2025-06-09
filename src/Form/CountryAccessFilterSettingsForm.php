@@ -51,12 +51,51 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       '#description' => $this->t('Enter country codes (ISO 3166-1 alpha-2) separated by spaces.'),
       '#default_value' => $countries_raw,
       '#required' => TRUE,
+      '#states' => [
+        'visible' => [
+          ':input[name="enabled"]' => ['checked' => TRUE],
+        ],
+      ],
     ];
 
-    $form['debug_mode'] = [
+    $form['track_404'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Debug mode'),
-      '#default_value' => $config->get('debug_mode'),
+      '#title' => $this->t('Enable 404 tracking and auto-ban'),
+      '#default_value' => $config->get('track_404'),
+      '#states' => [
+        'visible' => [
+          ':input[name="enabled"]' => ['checked' => TRUE],
+        ],
+      ],
+    ];
+
+    $form['track_404_threshold'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Number of 404 responses to trigger ban'),
+      '#default_value' => $config->get('track_404_threshold'),
+      '#min' => 1,
+      '#max' => 255,
+      '#states' => [
+        'visible' => [
+          ':input[name="enabled"]' => ['checked' => TRUE],
+          ':input[name="track_404"]' => ['checked' => TRUE],
+        ],
+      ],
+    ];
+
+    $form['track_404_window'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Time window (in hours) to accumulate 404s'),
+      '#default_value' => $config->get('track_404_window'),
+      '#min' => 1,
+      '#max' => 99,
+      '#description' => $this->t('Optional. Leave empty to allow unlimited time for reaching threshold. IPs will be banned once the threshold of 404 responses is reached, regardless of how much time has passed.'),
+      '#states' => [
+        'visible' => [
+          ':input[name="enabled"]' => ['checked' => TRUE],
+          ':input[name="track_404"]' => ['checked' => TRUE],
+        ],
+      ],
     ];
 
     // IPs info.
@@ -151,6 +190,13 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
         $form_state->setErrorByName('countries', $this->t('Invalid country code: %code. Please use ISO 3166-1 alpha-2 codes.', ['%code' => $country_code]));
       }
     }
+
+    if (
+      $form_state->getValue('track_404')
+      && ((int) $form_state->getValue('track_404_threshold') < 1)
+    ) {
+      $form_state->setErrorByName('track_404_threshold', $this->t('@name field is required.', ['@name' => $form['track_404_threshold']['#title']]));
+    }
   }
 
   /**
@@ -170,7 +216,9 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
     $config
       ->set('enabled', $form_state->getValue('enabled'))
       ->set('countries', $new_countries_raw)
-      ->set('debug_mode', $form_state->getValue('debug_mode'))
+      ->set('track_404', $form_state->getValue('track_404'))
+      ->set('track_404_threshold', $form_state->getValue('track_404_threshold'))
+      ->set('track_404_window', $form_state->getValue('track_404_window'))
       ->save();
 
     if ($added_countries) {
