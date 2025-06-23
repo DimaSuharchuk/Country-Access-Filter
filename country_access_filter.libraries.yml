@@ -1,4 +1,9 @@
+menu:
+  css:
+    theme:
+      css/menu.css: { }
+
 style:
   css:
     component:
-      css/style.css: {}
+      css/form.css: { }

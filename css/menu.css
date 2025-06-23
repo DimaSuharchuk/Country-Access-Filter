@@ -1,0 +1,7 @@
+#toolbar-link-country_access_filter-settings:before {
+  background-image: url("../icons/565656/menu-icon.svg");
+}
+#toolbar-link-country_access_filter-settings:active:before,
+#toolbar-link-country_access_filter-settings.is-active:before {
+  background-image: url("../icons/000000/menu-icon.svg");
+}

@@ -1,0 +1,13 @@
+<?php
+
+/**
+ * @file
+ * The module main file.
+ */
+
+/**
+ * Implements hook_toolbar_alter().
+ */
+function country_access_filter_toolbar_alter(&$items) {
+  $items['administration']['tray']['#attached']['library'][] = 'country_access_filter/menu';
+}
