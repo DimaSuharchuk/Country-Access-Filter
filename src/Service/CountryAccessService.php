@@ -59,8 +59,7 @@ class CountryAccessService {
         ])
         ->execute();
     }
-    catch (Exception $e) {
-      $this->logger->error($e->getMessage());
+    catch (Exception) {
     }
 
     return $status;
