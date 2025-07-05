@@ -5,6 +5,7 @@ namespace Drupal\country_access_filter\Form;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Link;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 class CountryAccessFilterSettingsForm extends ConfigFormBase {
@@ -14,7 +15,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
   /**
    * {@inheritDoc}
    */
-  public static function create(ContainerInterface $container) {
+  public static function create(ContainerInterface $container): static {
     $instance = parent::create($container);
 
     $instance->db = $container->get('database');
@@ -136,21 +137,41 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       ->select('country_access_filter_ips', 'i')
       ->fields('i', ['country_code'])
       ->groupBy('country_code');
-    $query->addExpression('COUNT(country_code)');
-    $countries = $query->execute()->fetchAllKeyed();
+    $query->addExpression('COUNT(country_code)', 'count');
+    $query->addExpression('SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END)', 'allowed');
+    $query->addExpression('SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END)', 'denied');
+    $countries = $query->execute()->fetchAll();
 
     $header = [
       'country' => $this->t('Country'),
       'count' => $this->t('IPs count'),
+      'actions' => $this->t('Actions'),
     ];
     $rows = [];
 
-    foreach ($countries as $country => $count) {
+    foreach ($countries as $item) {
+      $country = $item->country_code;
+
       $rows[$country] = [
         'data' => [
           'country' => $country,
-          'count' => $count,
+          'count' => $this->t('@count (allowed @allowed, denied @denied)', [
+            '@count' => $item->count,
+            '@allowed' => $item->allowed,
+            '@denied' => $item->denied,
+          ]),
+          'actions' => Link::createFromRoute($this->t('Details'), 'country_access_filter.form.country.details', ['country' => $country], [
+            'attributes' => [
+              'class' => [
+                'use-ajax',
+                'action',
+              ],
+              'data-dialog-type' => 'modal',
+              'data-dialog-options' => '{"width":600}',
+            ],
+          ]),
         ],
+        'data-country' => $country,
       ];
 
       if (array_key_exists($country, $countries_allowed)) {
@@ -161,6 +182,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
     $form['info']['countries'] = [
       '#type' => 'details',
       '#title' => $this->t('Countries'),
+      '#open' => TRUE,
     ];
     $form['info']['countries']['table'] = [
       '#type' => 'table',

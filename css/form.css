@@ -1,6 +1,12 @@
 #country-access-table tr {
-    background: lightcoral;
+  background: lightcoral;
 }
 #country-access-table tr.allowed {
-    background: lightgreen;
+  background: lightgreen;
+}
+#country-access-table .action {
+  color: #232429;
+  font-weight: bold;
+  outline: none;
+  box-shadow: none;
 }
