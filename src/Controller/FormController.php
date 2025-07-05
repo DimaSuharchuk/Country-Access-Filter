@@ -2,11 +2,10 @@
 
 namespace Drupal\country_access_filter\Controller;
 
-use Drupal\Component\Render\FormattableMarkup;
 use Drupal\Core\Ajax\AjaxResponse;
+use Drupal\Core\Ajax\HtmlCommand;
 use Drupal\Core\Ajax\MessageCommand;
 use Drupal\Core\Ajax\RemoveCommand;
-use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Link;
@@ -54,10 +53,22 @@ class FormController extends ControllerBase {
     foreach ($rows as $ip => $status) {
       $table['#rows'][] = [
         'data' => [
-          long2ip($ip),
-          $this->_getIpStatusText($status),
-          $this->_getIpStatusLink($ip, $status),
-          $this->_getIpRemoveLink($ip),
+          [
+            'data' => long2ip($ip),
+            'class' => ['ip'],
+          ],
+          [
+            'data' => $this->_getIpStatusText($status),
+            'class' => ['status'],
+          ],
+          [
+            'data' => $this->_getIpStatusLink($ip, $status),
+            'class' => ['ip-set-status-link'],
+          ],
+          [
+            'data' => $this->_getIpRemoveLink($ip),
+            'class' => ['ip-remove-link'],
+          ],
         ],
         'class' => ['row'],
         'data-id' => $ip,
@@ -86,15 +97,11 @@ class FormController extends ControllerBase {
     catch (Exception) {
     }
 
-    // Update on form.
-    $row = new FormattableMarkup('<tr class="row" data-id="@ip"><td>@ip_human</td><td>@status_text</td><td>@status_link</td><td>@remove_link</td></tr>', [
-      '@ip' => $ip,
-      '@ip_human' => long2ip($ip),
-      '@status_text' => $this->_getIpStatusText($status),
-      '@status_link' => $this->_getIpStatusLink($ip, $status)->toString(),
-      '@remove_link' => $this->_getIpRemoveLink($ip)->toString(),
-    ]);
-    $response->addCommand(new ReplaceCommand("tr[data-id=$ip]", $row));
+    // Update in the table.
+    $response->addCommand(new HtmlCommand("tr[data-id=$ip] td.status", $this->_getIpStatusText($status)));
+    $link = $this->_getIpStatusLink($ip, $status)->toString();
+    $response->addCommand(new HtmlCommand("tr[data-id=$ip] td.ip-set-status-link", $link));
+    // Message.
     $response->addCommand(new MessageCommand($this->t('Status for IP @ip has been changed.', ['@ip' => long2ip($ip)])));
 
     return $response;
