@@ -77,9 +77,9 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       '#min' => 1,
       '#max' => 255,
       '#states' => [
-        'visible' => [
-          ':input[name="enabled"]' => ['checked' => TRUE],
-          ':input[name="track_404"]' => ['checked' => TRUE],
+        'invisible' => [
+          [':input[name="enabled"]' => ['checked' => FALSE]],
+          [':input[name="track_404"]' => ['checked' => FALSE]],
         ],
       ],
     ];
@@ -92,9 +92,9 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       '#max' => 99,
       '#description' => $this->t('Optional. Leave empty to allow unlimited time for reaching threshold. IPs will be banned once the threshold of 404 responses is reached, regardless of how much time has passed.'),
       '#states' => [
-        'visible' => [
-          ':input[name="enabled"]' => ['checked' => TRUE],
-          ':input[name="track_404"]' => ['checked' => TRUE],
+        'invisible' => [
+          [':input[name="enabled"]' => ['checked' => FALSE]],
+          [':input[name="track_404"]' => ['checked' => FALSE]],
         ],
       ],
     ];
