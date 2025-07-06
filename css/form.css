@@ -1,12 +1,50 @@
 :root {
+  --country-denied-color: #f5c6cb; /* richer soft red */
+  --country-allowed-color: #c3e6cb; /* richer soft green */
+  --country-denied-mixed-color: #ffeeba; /* deeper yellow */
+  --country-allowed-mixed-color: #bee5eb; /* deeper cyan */
+
   --action-link-color: #232429;
 }
 
-#country-access-table tr {
-  background: lightcoral;
+/**
+ * Countries table.
+ */
+/* Table legend. */
+.access-legend-box {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1px solid;
 }
+.access-legend-box.access-denied {
+  background-color: var(--country-denied-color);
+}
+.access-legend-box.access-allowed {
+  background-color: var(--country-allowed-color);
+}
+.access-legend-box.access-mixed-denied {
+  background-color: var(--country-denied-mixed-color);
+}
+.access-legend-box.access-mixed-allowed {
+  background-color: var(--country-allowed-mixed-color);
+}
+/* Table rows. */
+/* All access denied (default state) */
+#country-access-table tr {
+  background: var(--country-denied-color);
+}
+/* All access allowed */
 #country-access-table tr.allowed {
-  background: lightgreen;
+  background: var(--country-allowed-color);
+}
+/* Mostly denied, with some manual allowances */
+#country-access-table tr.mixed {
+  background: var(--country-denied-mixed-color);
+}
+/* Mostly allowed, with some manual denials */
+#country-access-table tr.allowed.mixed {
+  background: var(--country-allowed-mixed-color);
 }
 
 .caf-action {

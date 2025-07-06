@@ -174,8 +174,17 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
         'data-country' => $country,
       ];
 
-      if (array_key_exists($country, $countries_allowed)) {
+      $country_allowed = array_key_exists($country, $countries_allowed);
+
+      if ($country_allowed) {
         $rows[$country]['class'][] = 'allowed';
+      }
+
+      if (
+        $country_allowed && $item->denied
+        || !$country_allowed && $item->allowed
+      ) {
+        $rows[$country]['class'][] = 'mixed';
       }
     }
 
@@ -183,6 +192,25 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       '#type' => 'details',
       '#title' => $this->t('Countries'),
       '#open' => TRUE,
+    ];
+    $form['info']['countries']['table_legend'] = [
+      '#theme' => 'item_list',
+      '#title' => $this->t('Countries table legend'),
+      '#items' => [
+        [
+          '#markup' => '<span class="access-legend-box access-denied"></span> ' . $this->t('Country access denied, all IPs denied by default.'),
+        ],
+        [
+          '#markup' => '<span class="access-legend-box access-allowed"></span> ' . $this->t('Country access allowed, all IPs allowed by default.'),
+        ],
+        [
+          '#markup' => '<span class="access-legend-box access-mixed-denied"></span> ' . $this->t('Country access denied, with some IPs allowed manually.'),
+        ],
+        [
+          '#markup' => '<span class="access-legend-box access-mixed-allowed"></span> ' . $this->t('Country access allowed, with some IPs denied manually.'),
+        ],
+      ],
+      '#attributes' => ['class' => ['access-table-legend']],
     ];
     $form['info']['countries']['table'] = [
       '#type' => 'table',
