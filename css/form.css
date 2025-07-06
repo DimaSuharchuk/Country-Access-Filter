@@ -1,12 +1,20 @@
+:root {
+  --action-link-color: #232429;
+}
+
 #country-access-table tr {
   background: lightcoral;
 }
 #country-access-table tr.allowed {
   background: lightgreen;
 }
-#country-access-table .action {
-  color: #232429;
+
+.caf-action {
+  color: var(--action-link-color);
   font-weight: bold;
   outline: none;
   box-shadow: none;
+}
+.caf-action:hover {
+  color: var(--action-link-color);
 }

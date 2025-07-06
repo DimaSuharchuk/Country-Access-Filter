@@ -164,10 +164,10 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
             'attributes' => [
               'class' => [
                 'use-ajax',
-                'action',
+                'caf-action',
               ],
               'data-dialog-type' => 'modal',
-              'data-dialog-options' => '{"width":600}',
+              'data-dialog-options' => '{"width":800}',
             ],
           ]),
         ],

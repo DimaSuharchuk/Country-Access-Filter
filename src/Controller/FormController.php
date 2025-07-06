@@ -9,6 +9,7 @@ use Drupal\Core\Ajax\RemoveCommand;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Link;
+use Drupal\Core\Url;
 use Exception;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -24,7 +25,7 @@ class FormController extends ControllerBase {
     return $instance;
   }
 
-  public function countryDetails($country): array {
+  public function countryDetailsAjaxCallback($country): array {
     try {
       $rows = $this->db->select('country_access_filter_ips', 'i')
         ->fields('i', ['ip', 'status'])
@@ -43,6 +44,7 @@ class FormController extends ControllerBase {
         $this->t('Status'),
         $this->t('Access'),
         $this->t('Remove from ban list'),
+        $this->t('IP info'),
       ],
       '#rows' => [],
       '#attributes' => [
@@ -54,7 +56,7 @@ class FormController extends ControllerBase {
       $table['#rows'][] = [
         'data' => [
           [
-            'data' => long2ip($ip),
+            'data' => $this->_ipToReadable($ip),
             'class' => ['ip'],
           ],
           [
@@ -69,6 +71,10 @@ class FormController extends ControllerBase {
             'data' => $this->_getIpRemoveLink($ip),
             'class' => ['ip-remove-link'],
           ],
+          [
+            'data' => $this->_getIpInfoLink($ip),
+            'class' => ['ip-info'],
+          ],
         ],
         'class' => ['row'],
         'data-id' => $ip,
@@ -78,7 +84,7 @@ class FormController extends ControllerBase {
     return $table;
   }
 
-  public function ipSetStatus($ip, $status): AjaxResponse {
+  public function ipSetStatusAjaxCallback(int $ip, int $status): AjaxResponse {
     $response = new AjaxResponse();
 
     if (!is_numeric($ip) || !is_numeric($status)) {
@@ -102,12 +108,12 @@ class FormController extends ControllerBase {
     $link = $this->_getIpStatusLink($ip, $status)->toString();
     $response->addCommand(new HtmlCommand("tr[data-id=$ip] td.ip-set-status-link", $link));
     // Message.
-    $response->addCommand(new MessageCommand($this->t('Status for IP @ip has been changed.', ['@ip' => long2ip($ip)])));
+    $response->addCommand(new MessageCommand($this->t('Status for IP @ip has been changed.', ['@ip' => $this->_ipToReadable($ip)])));
 
     return $response;
   }
 
-  public function ipRemove($ip): AjaxResponse {
+  public function ipRemoveAjaxCallback(int $ip): AjaxResponse {
     $response = new AjaxResponse();
 
     try {
@@ -116,7 +122,7 @@ class FormController extends ControllerBase {
         ->execute();
 
       $response->addCommand(new RemoveCommand("tr[data-id=$ip]"));
-      $response->addCommand(new MessageCommand($this->t('IP @ip has been removed.', ['@ip' => long2ip($ip)])));
+      $response->addCommand(new MessageCommand($this->t('IP @ip has been removed.', ['@ip' => $this->_ipToReadable($ip)])));
     }
     catch (Exception) {
     }
@@ -124,36 +130,52 @@ class FormController extends ControllerBase {
     return $response;
   }
 
-  private function _getIpStatusText($status): string {
+  private function _ipToReadable(int $ip): string {
+    return long2ip($ip);
+  }
+
+  private function _getIpStatusText(int $status): string {
     return $status ? '✅' : '⛔';
   }
 
-  private function _getIpStatusLink($ip, $status): Link {
+  private function _getIpStatusLink(int $ip, int $status): Link {
     return Link::createFromRoute(
       $status ? $this->t('Deny access') : $this->t('Give access'),
       'country_access_filter.form.country.details.ip.status',
       [
-        'status' => (int) !$status,
+        'status' => $status ? 0 : 1,
         'ip' => $ip,
       ],
       [
         'attributes' => [
-          'class' => ['use-ajax', 'action'],
+          'class' => ['use-ajax', 'caf-action'],
         ],
       ]
     );
   }
 
-  private function _getIpRemoveLink($ip): Link {
+  private function _getIpRemoveLink(int $ip): Link {
     return Link::createFromRoute(
       $this->t('Remove'),
       'country_access_filter.form.country.details.ip.remove',
       ['ip' => $ip],
       [
         'attributes' => [
-          'class' => ['use-ajax', 'action'],
+          'class' => ['use-ajax', 'caf-action'],
         ],
       ]
+    );
+  }
+
+  private function _getIpInfoLink(int $ip): Link {
+    return Link::fromTextAndUrl(
+      $this->t('IP info'),
+      Url::fromUri("http://geoplugin.net/json.gp?ip={$this->_ipToReadable($ip)}", [
+        'attributes' => [
+          'target' => '_blank',
+          'class' => ['caf-action'],
+        ],
+      ]),
     );
   }
 
