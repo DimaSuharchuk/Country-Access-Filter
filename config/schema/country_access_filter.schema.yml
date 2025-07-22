@@ -10,3 +10,12 @@ country_access_filter.settings:
     countries:
       type: string
       label: 'Allowed countries'
+    track_404:
+      type: boolean
+      label: 'Track 404 requests'
+    track_404_threshold:
+      type: integer
+      label: '404 threshold before banning IP'
+    track_404_window:
+      type: integer
+      label: 'Time window in seconds to count 404s'
