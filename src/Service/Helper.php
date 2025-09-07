@@ -23,13 +23,13 @@ class Helper {
       return NULL;
     }
 
-    $url = "http://www.geoplugin.net/json.gp?ip=$ip";
+    $url = "http://ip-api.com/json/$ip?fields=countryCode";
 
     try {
       $response = $this->httpClient->request('GET', $url);
       $data = $this->serialization->decode($response->getBody()->getContents());
 
-      return $data['geoplugin_countryCode'] ?? 'XX';
+      return $data['countryCode'] ?? 'XX';
     }
     catch (GuzzleException) {
     }

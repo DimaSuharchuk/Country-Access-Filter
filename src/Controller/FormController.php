@@ -170,7 +170,7 @@ class FormController extends ControllerBase {
   private function _getIpInfoLink(int $ip): Link {
     return Link::fromTextAndUrl(
       $this->t('IP info'),
-      Url::fromUri("http://geoplugin.net/json.gp?ip={$this->_ipToReadable($ip)}", [
+      Url::fromUri("http://ip-api.com/json/{$this->_ipToReadable($ip)}", [
         'attributes' => [
           'target' => '_blank',
           'class' => ['caf-action'],
