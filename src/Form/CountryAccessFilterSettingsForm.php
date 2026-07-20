@@ -167,8 +167,6 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
     $query->addExpression('SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END)', 'denied');
     $countries = $query->execute()->fetchAll();
 
-    $countries_allowed = $this->helper->getAllowedCountries();
-
     $header = [
       'country' => $this->t('Country'),
       'count' => $this->t('IPs count'),
@@ -201,7 +199,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
         'data-country' => $country,
       ];
 
-      $country_allowed = array_key_exists($country, $countries_allowed);
+      $country_allowed = $this->helper->isCountryAllowed($country);
 
       if ($country_allowed) {
         $rows[$country]['class'][] = 'allowed';

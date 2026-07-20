@@ -40,11 +40,21 @@ class Helper {
   }
 
   function getAllowedCountries(): array {
-    $config = $this->configFactory->get('country_access_filter.settings');
-    $selected_countries = explode(' ', $config->get('countries'));
-    $countries_allowed = $config->get('country_access_mode') === AccessMode::ALLOW->value ? $selected_countries : array_diff(array_keys($this->countryManager->getList()), $selected_countries);
+    $result = &drupal_static(__METHOD__);
 
-    return array_combine($countries_allowed, $countries_allowed);
+    if ($result === NULL) {
+      $config = $this->configFactory->get('country_access_filter.settings');
+      $selected_countries = explode(' ', $config->get('countries'));
+      $countries_allowed = $config->get('country_access_mode') === AccessMode::ALLOW->value ? $selected_countries : array_diff(array_keys($this->countryManager->getList()), $selected_countries);
+
+      $result = array_combine($countries_allowed, $countries_allowed);
+    }
+
+    return $result;
+  }
+
+  function isCountryAllowed(string $country): bool {
+    return array_key_exists($country, $this->getAllowedCountries());
   }
 
 }

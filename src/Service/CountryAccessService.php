@@ -46,7 +46,7 @@ class CountryAccessService {
       return CountryAccess::Error;
     }
 
-    $status = isset($this->helper->getAllowedCountries()[$country_code]) ? CountryAccess::Allow : CountryAccess::Deny;
+    $status = $this->helper->isCountryAllowed($country_code) ? CountryAccess::Allow : CountryAccess::Deny;
 
     try {
       $this->database->insert('country_access_filter_ips')
