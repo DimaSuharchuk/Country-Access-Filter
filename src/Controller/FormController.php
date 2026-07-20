@@ -11,10 +11,12 @@ use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Link;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
-use Drupal\Core\Url;
 use Drupal\country_access_filter\Service\Helper;
 use Exception;
+use GuzzleHttp\ClientInterface;
+use GuzzleHttp\Exception\GuzzleException;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\HttpFoundation\Response;
 
 class FormController extends ControllerBase {
 
@@ -22,11 +24,14 @@ class FormController extends ControllerBase {
 
   private Helper $helper;
 
+  private ClientInterface $httpClient;
+
   public static function create(ContainerInterface $container): static {
     $instance = parent::create($container);
 
     $instance->db = $container->get('database');
     $instance->helper = $container->get('country_access_filter.helper');
+    $instance->httpClient = $container->get('http_client');
 
     return $instance;
   }
@@ -140,6 +145,24 @@ class FormController extends ControllerBase {
     }
 
     return $response;
+  }
+
+  public function ipInfoCallback(int $ip): Response {
+    $readable_ip = $this->ipToReadable($ip);
+
+    try {
+      $response = $this->httpClient->request('GET', "http://ip-api.com/json/$readable_ip");
+      $data = json_decode($response->getBody()->getContents(), TRUE) ?: [];
+    }
+    catch (GuzzleException $exception) {
+      $data = [
+        'error' => $exception->getMessage(),
+      ];
+    }
+
+    return new Response($readable_ip . PHP_EOL . PHP_EOL . print_r($data, TRUE), Response::HTTP_OK, [
+      'Content-Type' => 'text/plain; charset=UTF-8',
+    ]);
   }
 
   private function addCountryTableRowUpdateCommands(AjaxResponse $response, ?string $country): void {
@@ -262,14 +285,16 @@ class FormController extends ControllerBase {
   }
 
   private function getIpInfoLink(int $ip): Link {
-    return Link::fromTextAndUrl(
+    return Link::createFromRoute(
       $this->t('IP info'),
-      Url::fromUri("http://ip-api.com/json/{$this->ipToReadable($ip)}", [
+      'country_access_filter.form.country.details.ip.info',
+      ['ip' => $ip],
+      [
         'attributes' => [
           'target' => '_blank',
           'class' => ['caf-action'],
         ],
-      ]),
+      ],
     );
   }
 

@@ -29,3 +29,10 @@ country_access_filter.form.country.details.ip.remove:
   requirements:
     _permission: 'administer site configuration'
     _csrf_token: 'TRUE'
+country_access_filter.form.country.details.ip.info:
+  path: '/admin/country-access-filter/ip/{ip}/info'
+  defaults:
+    _controller: '\Drupal\country_access_filter\Controller\FormController::ipInfoCallback'
+    _title: 'IP info'
+  requirements:
+    _permission: 'administer site configuration'
