@@ -56,23 +56,23 @@ class FormController extends ControllerBase {
       $table['#rows'][] = [
         'data' => [
           [
-            'data' => $this->_ipToReadable($ip),
+            'data' => $this->ipToReadable($ip),
             'class' => ['ip'],
           ],
           [
-            'data' => $this->_getIpStatusText($status),
+            'data' => $this->getIpStatusText($status),
             'class' => ['status'],
           ],
           [
-            'data' => $this->_getIpStatusLink($ip, $status),
+            'data' => $this->getIpStatusLink($ip, $status),
             'class' => ['ip-set-status-link'],
           ],
           [
-            'data' => $this->_getIpRemoveLink($ip),
+            'data' => $this->getIpRemoveLink($ip),
             'class' => ['ip-remove-link'],
           ],
           [
-            'data' => $this->_getIpInfoLink($ip),
+            'data' => $this->getIpInfoLink($ip),
             'class' => ['ip-info'],
           ],
         ],
@@ -104,11 +104,11 @@ class FormController extends ControllerBase {
     }
 
     // Update in the table.
-    $response->addCommand(new HtmlCommand("tr[data-id=$ip] td.status", $this->_getIpStatusText($status)));
-    $link = $this->_getIpStatusLink($ip, $status)->toString();
+    $response->addCommand(new HtmlCommand("tr[data-id=$ip] td.status", $this->getIpStatusText($status)));
+    $link = $this->getIpStatusLink($ip, $status)->toString();
     $response->addCommand(new HtmlCommand("tr[data-id=$ip] td.ip-set-status-link", $link));
     // Message.
-    $response->addCommand(new MessageCommand($this->t('Status for IP @ip has been changed.', ['@ip' => $this->_ipToReadable($ip)])));
+    $response->addCommand(new MessageCommand($this->t('Status for IP @ip has been changed.', ['@ip' => $this->ipToReadable($ip)])));
 
     return $response;
   }
@@ -122,7 +122,7 @@ class FormController extends ControllerBase {
         ->execute();
 
       $response->addCommand(new RemoveCommand("tr[data-id=$ip]"));
-      $response->addCommand(new MessageCommand($this->t('IP @ip has been removed.', ['@ip' => $this->_ipToReadable($ip)])));
+      $response->addCommand(new MessageCommand($this->t('IP @ip has been removed.', ['@ip' => $this->ipToReadable($ip)])));
     }
     catch (Exception) {
     }
@@ -130,15 +130,15 @@ class FormController extends ControllerBase {
     return $response;
   }
 
-  private function _ipToReadable(int $ip): string {
+  private function ipToReadable(int $ip): string {
     return long2ip($ip);
   }
 
-  private function _getIpStatusText(int $status): string {
+  private function getIpStatusText(int $status): string {
     return $status ? '✅' : '⛔';
   }
 
-  private function _getIpStatusLink(int $ip, int $status): Link {
+  private function getIpStatusLink(int $ip, int $status): Link {
     return Link::createFromRoute(
       $status ? $this->t('Deny access') : $this->t('Give access'),
       'country_access_filter.form.country.details.ip.status',
@@ -154,7 +154,7 @@ class FormController extends ControllerBase {
     );
   }
 
-  private function _getIpRemoveLink(int $ip): Link {
+  private function getIpRemoveLink(int $ip): Link {
     return Link::createFromRoute(
       $this->t('Remove'),
       'country_access_filter.form.country.details.ip.remove',
@@ -167,10 +167,10 @@ class FormController extends ControllerBase {
     );
   }
 
-  private function _getIpInfoLink(int $ip): Link {
+  private function getIpInfoLink(int $ip): Link {
     return Link::fromTextAndUrl(
       $this->t('IP info'),
-      Url::fromUri("http://ip-api.com/json/{$this->_ipToReadable($ip)}", [
+      Url::fromUri("http://ip-api.com/json/{$this->ipToReadable($ip)}", [
         'attributes' => [
           'target' => '_blank',
           'class' => ['caf-action'],
