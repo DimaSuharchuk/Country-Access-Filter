@@ -46,8 +46,7 @@ class NotFoundSubscriber implements EventSubscriberInterface {
     }
 
     $threshold = (int) $config->get('track_404_threshold');
-    $window_hours = $config->get('track_404_window');
-    $window_seconds = $window_hours ? ($window_hours * 3600) : NULL;
+    $window_seconds = $config->get('track_404_window') ?: NULL;
 
     try {
       $ip = $this->requestStack->getCurrentRequest()->getClientIp();

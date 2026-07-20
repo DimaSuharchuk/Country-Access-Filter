@@ -3,4 +3,4 @@ countries: 'UA'
 country_access_mode: 'allow'
 track_404: false
 track_404_threshold: 5
-track_404_window: 1
+track_404_window: 3600

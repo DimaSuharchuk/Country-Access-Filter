@@ -162,3 +162,18 @@ function country_access_filter_update_10005(): void {
     ->set('country_access_mode', AccessMode::ALLOW->value)
     ->save();
 }
+
+/**
+ * Convert 404 tracking window from hours to seconds.
+ */
+function country_access_filter_update_10006(): void {
+  $config = Drupal::configFactory()
+    ->getEditable('country_access_filter.settings');
+  $window = $config->get('track_404_window');
+
+  if (is_numeric($window)) {
+    $config
+      ->set('track_404_window', (int) $window * 3600)
+      ->save();
+  }
+}

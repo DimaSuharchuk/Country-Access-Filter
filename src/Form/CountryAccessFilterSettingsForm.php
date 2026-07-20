@@ -111,10 +111,10 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
 
     $form['track_404_wrapper']['track_404_window'] = [
       '#type' => 'number',
-      '#title' => $this->t('Time window (in hours) to accumulate 404s'),
+      '#title' => $this->t('Time window (in seconds) to accumulate 404s'),
       '#default_value' => $config->get('track_404_window'),
       '#min' => 1,
-      '#max' => 99,
+      '#max' => 356400,
       '#description' => $this->t('Optional. Leave empty to allow unlimited time for reaching threshold. IPs will be banned once the threshold of 404 responses is reached, regardless of how much time has passed.'),
       '#states' => [
         'invisible' => [
