@@ -20,6 +20,7 @@ country_access_filter.form.country.details.ip.status:
     _title: 'Set status for IP (0 - denied, 1 - allowed)'
   requirements:
     _permission: 'administer site configuration'
+    _csrf_token: 'TRUE'
 country_access_filter.form.country.details.ip.remove:
   path: '/ajax/caf/ip/{ip}/remove'
   defaults:
@@ -27,3 +28,4 @@ country_access_filter.form.country.details.ip.remove:
     _title: 'Remove IP from DB'
   requirements:
     _permission: 'administer site configuration'
+    _csrf_token: 'TRUE'

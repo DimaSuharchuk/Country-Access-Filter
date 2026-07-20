@@ -105,7 +105,7 @@ class FormController extends ControllerBase {
 
     // Update in the table.
     $response->addCommand(new HtmlCommand("tr[data-id=$ip] td.status", $this->getIpStatusText($status)));
-    $link = $this->getIpStatusLink($ip, $status)->toString();
+    $link = $this->getIpStatusLink($ip, $status)->toRenderable();
     $response->addCommand(new HtmlCommand("tr[data-id=$ip] td.ip-set-status-link", $link));
     // Message.
     $response->addCommand(new MessageCommand($this->t('Status for IP @ip has been changed.', ['@ip' => $this->ipToReadable($ip)])));
