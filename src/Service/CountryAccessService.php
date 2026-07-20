@@ -8,7 +8,6 @@ use Drupal\Core\Database\Connection;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
 use Exception;
-use function explode;
 
 class CountryAccessService {
 
@@ -47,8 +46,7 @@ class CountryAccessService {
       return CountryAccess::Error;
     }
 
-    $allowed_countries = explode(' ', $this->config->get('countries'));
-    $status = in_array($country_code, $allowed_countries) ? CountryAccess::Allow : CountryAccess::Deny;
+    $status = isset($this->helper->getAllowedCountries()[$country_code]) ? CountryAccess::Allow : CountryAccess::Deny;
 
     try {
       $this->database->insert('country_access_filter_ips')

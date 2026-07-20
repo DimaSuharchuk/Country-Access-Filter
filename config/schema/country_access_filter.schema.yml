@@ -10,6 +10,9 @@ country_access_filter.settings:
     countries:
       type: string
       label: 'Allowed countries'
+    country_access_mode:
+      type: string
+      label: 'Country access mode'
     track_404:
       type: boolean
       label: 'Track 404 requests'

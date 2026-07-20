@@ -33,3 +33,5 @@ services:
     arguments:
       - '@http_client'
       - '@serialization.json'
+      - '@config.factory'
+      - '@country_manager'

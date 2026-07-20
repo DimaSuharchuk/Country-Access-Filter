@@ -5,6 +5,8 @@
  * Install, update, and uninstall functions for the module.
  */
 
+use Drupal\country_access_filter\AccessMode;
+
 /**
  * Implements hook_schema().
  */
@@ -80,7 +82,7 @@ function country_access_filter_update_10001() {
   $index_name = $field;
   $spec = country_access_filter_schema()[$table] ?? FALSE;
 
-  $connection = \Drupal::database();
+  $connection = Drupal::database();
   $schema = $connection->schema();
 
   if (
@@ -149,4 +151,14 @@ function country_access_filter_update_10004(): void {
   if ($changed) {
     $config->save();
   }
+}
+
+/**
+ * Add "country_access_mode" to module config.
+ */
+function country_access_filter_update_10005(): void {
+  Drupal::configFactory()
+    ->getEditable('country_access_filter.settings')
+    ->set('country_access_mode', AccessMode::ALLOW->value)
+    ->save();
 }

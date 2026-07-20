@@ -6,11 +6,18 @@ use Drupal\Core\Database\Connection;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Link;
+use Drupal\Core\Locale\CountryManagerInterface;
+use Drupal\country_access_filter\AccessMode;
+use Drupal\country_access_filter\Service\Helper;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 class CountryAccessFilterSettingsForm extends ConfigFormBase {
 
   protected ?Connection $db;
+
+  protected CountryManagerInterface $countries;
+
+  protected Helper $helper;
 
   /**
    * {@inheritDoc}
@@ -19,6 +26,8 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
     $instance = parent::create($container);
 
     $instance->db = $container->get('database');
+    $instance->countries = $container->get('country_manager');
+    $instance->helper = $container->get('country_access_filter.helper');
 
     return $instance;
   }
@@ -36,9 +45,6 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state): array {
     $config = $this->config('country_access_filter.settings');
-    $countries_raw = $config->get('countries');
-    $countries_allowed = explode(' ', $countries_raw);
-    $countries_allowed = array_combine($countries_allowed, $countries_allowed);
 
     $form['enabled'] = [
       '#type' => 'checkbox',
@@ -46,12 +52,8 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       '#default_value' => $config->get('enabled'),
     ];
 
-    $form['countries'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Allowed countries'),
-      '#description' => $this->t('Enter country codes (ISO 3166-1 alpha-2) separated by spaces.'),
-      '#default_value' => $countries_raw,
-      '#required' => TRUE,
+    $form['countries_wrapper'] = [
+      '#type' => 'fieldset',
       '#states' => [
         'visible' => [
           ':input[name="enabled"]' => ['checked' => TRUE],
@@ -59,18 +61,41 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       ],
     ];
 
-    $form['track_404'] = [
+    $form['countries_wrapper']['country_access_mode'] = [
+      '#type' => 'radios',
+      '#title' => $this->t('Country access mode'),
+      '#options' => [
+        AccessMode::ALLOW->value => $this->t('Allow selected countries'),
+        AccessMode::DENY->value => $this->t('Block selected countries'),
+      ],
+      '#default_value' => $config->get('country_access_mode') ?? AccessMode::ALLOW->value,
+    ];
+
+    $form['countries_wrapper']['countries'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Countries'),
+      '#default_value' => explode(' ', $config->get('countries')),
+      '#options' => $this->countries->getList(),
+      '#multiple' => TRUE,
+      '#chosen' => TRUE,
+    ];
+
+    $form['track_404_wrapper'] = [
+      '#type' => 'fieldset',
+      '#states' => [
+        'visible' => [
+          ':input[name="enabled"]' => ['checked' => TRUE],
+        ],
+      ],
+    ];
+
+    $form['track_404_wrapper']['track_404'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Enable 404 tracking and auto-ban'),
       '#default_value' => $config->get('track_404'),
-      '#states' => [
-        'visible' => [
-          ':input[name="enabled"]' => ['checked' => TRUE],
-        ],
-      ],
     ];
 
-    $form['track_404_threshold'] = [
+    $form['track_404_wrapper']['track_404_threshold'] = [
       '#type' => 'number',
       '#title' => $this->t('Number of 404 responses to trigger ban'),
       '#default_value' => $config->get('track_404_threshold'),
@@ -84,7 +109,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       ],
     ];
 
-    $form['track_404_window'] = [
+    $form['track_404_wrapper']['track_404_window'] = [
       '#type' => 'number',
       '#title' => $this->t('Time window (in hours) to accumulate 404s'),
       '#default_value' => $config->get('track_404_window'),
@@ -114,7 +139,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
     $form['info'] = [
       '#type' => 'details',
       '#title' => $this->t('Info'),
-      '#open' => TRUE,
+      '#open' => FALSE,
     ];
     $form['info']['ips_all'] = [
       '#type' => 'item',
@@ -141,6 +166,8 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
     $query->addExpression('SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END)', 'allowed');
     $query->addExpression('SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END)', 'denied');
     $countries = $query->execute()->fetchAll();
+
+    $countries_allowed = $this->helper->getAllowedCountries();
 
     $header = [
       'country' => $this->t('Country'),
@@ -233,9 +260,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function validateForm(array &$form, FormStateInterface $form_state): void {
-    $countries = explode(' ', trim($form_state->getValue('countries')));
-
-    foreach ($countries as $country_code) {
+    foreach ($form_state->getValue('countries') as $country_code) {
       if (!preg_match('/^[A-Z]{2}$/', $country_code)) {
         $form_state->setErrorByName('countries', $this->t('Invalid country code: %code. Please use ISO 3166-1 alpha-2 codes.', ['%code' => $country_code]));
       }
@@ -245,7 +270,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       $form_state->getValue('track_404')
       && ((int) $form_state->getValue('track_404_threshold') < 1)
     ) {
-      $form_state->setErrorByName('track_404_threshold', $this->t('@name field is required.', ['@name' => $form['track_404_threshold']['#title']]));
+      $form_state->setErrorByName('track_404_threshold', $this->t('@name field is required.', ['@name' => $form['track_404_wrapper']['track_404_threshold']['#title']]));
     }
   }
 
@@ -255,34 +280,41 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
   public function submitForm(array &$form, FormStateInterface $form_state): void {
     $config = $this->config('country_access_filter.settings');
 
-    $old_countries_raw = $config->get('countries');
-    $new_countries_raw = trim($form_state->getValue('countries'));
-    $old_countries = explode(' ', $old_countries_raw);
-    $new_countries = explode(' ', $new_countries_raw);
+    $access_mode = $form_state->getValue('country_access_mode');
+    $is_access_allowed = $access_mode == AccessMode::ALLOW->value;
 
-    $added_countries = array_diff($new_countries, $old_countries);
-    $removed_countries = array_diff($old_countries, $new_countries);
+    $selected_countries = $form_state->getValue('countries');
+    $all_counties = array_keys($this->countries->getList());
 
     $config
       ->set('enabled', $form_state->getValue('enabled'))
-      ->set('countries', $new_countries_raw)
+      ->set('countries', implode(' ', $selected_countries))
+      ->set('country_access_mode', $access_mode)
       ->set('track_404', $form_state->getValue('track_404'))
       ->set('track_404_threshold', $form_state->getValue('track_404_threshold'))
       ->set('track_404_window', $form_state->getValue('track_404_window'))
       ->save();
 
-    if ($added_countries) {
+    $unlock_countries = $is_access_allowed ? $selected_countries : array_diff($all_counties, $selected_countries);
+    $block_countries = array_diff($all_counties, $unlock_countries);
+
+    if ($unlock_countries) {
       $this->db->update('country_access_filter_ips')
         ->fields(['status' => 1])
-        ->condition('country_code', $added_countries, 'IN')
+        ->condition('country_code', $unlock_countries, 'IN')
         ->execute();
     }
 
-    if ($removed_countries) {
+    if ($block_countries) {
       $this->db->update('country_access_filter_ips')
         ->fields(['status' => 0])
-        ->condition('country_code', $removed_countries, 'IN')
+        ->condition('country_code', $block_countries, 'IN')
         ->execute();
+    }
+
+    if (!$selected_countries && $is_access_allowed) {
+      $this->messenger()
+        ->addWarning($this->t('No country has been selected; the site will be available only to logged-in users with an active session.'));
     }
 
     parent::submitForm($form, $form_state);
