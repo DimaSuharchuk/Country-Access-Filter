@@ -123,3 +123,30 @@ function country_access_filter_update_10003() {
     ->clear('debug_mode')
     ->save();
 }
+
+/**
+ * Add default values for 404 tracking config.
+ */
+function country_access_filter_update_10004(): void {
+  $config = Drupal::configFactory()
+    ->getEditable('country_access_filter.settings');
+  $data = $config->getRawData();
+  $changed = FALSE;
+
+  $defaults = [
+    'track_404' => FALSE,
+    'track_404_threshold' => 5,
+    'track_404_window' => 1,
+  ];
+
+  foreach ($defaults as $key => $value) {
+    if (!array_key_exists($key, $data)) {
+      $config->set($key, $value);
+      $changed = TRUE;
+    }
+  }
+
+  if ($changed) {
+    $config->save();
+  }
+}

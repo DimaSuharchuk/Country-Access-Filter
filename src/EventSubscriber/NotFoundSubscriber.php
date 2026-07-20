@@ -75,7 +75,7 @@ class NotFoundSubscriber implements EventSubscriberInterface {
         else {
           $new_count = $record->count + 1;
 
-          if ($new_count > $threshold) {
+          if ($new_count >= $threshold) {
             // Add to the blocklist.
             $this->db->merge('country_access_filter_ips')
               ->keys([

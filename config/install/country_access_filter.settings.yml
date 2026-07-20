@@ -1,2 +1,5 @@
 enabled: true
 countries: 'UA'
+track_404: false
+track_404_threshold: 5
+track_404_window: 1
