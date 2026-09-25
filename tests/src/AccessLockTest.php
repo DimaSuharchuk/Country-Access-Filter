@@ -55,6 +55,7 @@ final class AccessLockTest extends AuditTestBase {
     $this->configurePolicy(['country_access_mode' => $mode, 'countries' => $countries]);
     $this->db->schema()->dropField(IpStorage::TABLE, 'access_locked');
     $expected = [];
+
     foreach (['UA', 'US', 'XX'] as $index => $country) {
       foreach ([0, 1] as $access) {
         $address = "2001:db8::$index$access";
@@ -66,16 +67,20 @@ final class AccessLockTest extends AuditTestBase {
         $expected[$address] = [$country, (bool) $access, (bool) $access !== in_array($country, $allowed, TRUE)];
       }
     }
+
     country_access_filter_update_10010();
     // Retrying the update must preserve all decisions and inferred exceptions.
     country_access_filter_update_10010();
+
     $storage = new IpStorage($this->db);
+
     foreach ($expected as $address => [$country, $access, $locked]) {
       $ip = $storage->load(new IpInput($address));
       self::assertSame($country, $ip->getCountryCode());
       self::assertSame($access, $ip->isAllowed());
       self::assertSame($locked, $ip->isAccessLocked());
     }
+
     $input = new IpInput('192.0.2.9');
     $this->db->insert(IpStorage::TABLE)->fields([
       'ip' => $input->getStorableValue(), 'country_code' => 'UA', 'access' => 1,

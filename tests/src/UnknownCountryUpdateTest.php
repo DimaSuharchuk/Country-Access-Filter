@@ -25,10 +25,12 @@ final class UnknownCountryUpdateTest extends AuditTestBase {
       $this->ip('192.0.2.2', IpAccess::Allowed, 'UA'),
       $this->ip('2001:db8::2', IpAccess::Denied, 'US'),
     ];
+
     foreach ($fixtures as $index => $ip) {
       self::assertTrue($index === 1 ? $storage->deny($ip) : $storage->save($ip));
       self::assertTrue($trackers->save(new Tracked404($ip, 1234567890, 3)));
     }
+
     $orphan = $this->ip('192.0.2.99');
     self::assertTrue($trackers->save(new Tracked404($orphan, 1234567890, 2)));
     country_access_filter_update_10011();
@@ -36,8 +38,10 @@ final class UnknownCountryUpdateTest extends AuditTestBase {
     // Updates finish before normal requests load the runtime storage services.
     $storage = new IpStorage($this->db);
     $trackers = new Tracker404Storage($this->db);
+
     foreach ($fixtures as $ip) {
       $loaded = $storage->load(new IpInput($ip->getId()));
+
       if ($ip->getCountryCode() === 'XX') {
         self::assertNull($loaded);
         self::assertNull($trackers->load($ip));
@@ -48,6 +52,7 @@ final class UnknownCountryUpdateTest extends AuditTestBase {
         self::assertSame(3, $trackers->load($ip)->getCount());
       }
     }
+
     self::assertSame(2, $trackers->load($orphan)->getCount());
     // A legitimate unknown country can be stored again after the update.
     self::assertTrue($storage->save($fixtures[0]));

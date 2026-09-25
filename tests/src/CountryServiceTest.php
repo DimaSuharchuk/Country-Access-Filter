@@ -31,6 +31,7 @@ final class CountryServiceTest extends AuditTestBase {
   private function service(MockHandler $handler, array $config = []): CountryService {
     $countries = $this->createMock(CountryManagerInterface::class);
     $countries->method('getList')->willReturn(['UA' => 'Ukraine', 'US' => 'United States', 'UG' => 'Uganda']);
+
     return new CountryService(new IpStorage($this->db), new Client(['handler' => HandlerStack::create($handler)]), new Json(), $this->configFactory($config), $countries);
   }
 
@@ -51,6 +52,7 @@ final class CountryServiceTest extends AuditTestBase {
   public function testCountryPolicies(string $mode, string $selected, string $country, bool $allowed): void {
     $handler = new MockHandler([new Response(200, [], json_encode(['countryCode' => $country]))]);
     $service = $this->service($handler, ['country_access_mode' => $mode, 'countries' => $selected]);
+
     self::assertSame($allowed, $service->hasAccess(new IpInput('192.0.2.1')));
     self::assertSame($allowed, $service->hasAccess(new IpInput('::ffff:192.0.2.1')));
     self::assertCount(0, $handler, 'Repeated IP must use stored decision.');
@@ -127,9 +129,13 @@ final class CountryServiceTest extends AuditTestBase {
    */
   public function testConfigModeChangeAllowsPreviouslyDeniedIp(): void {
     $service = $this->configurePolicy();
+
     (new IpStorage($this->db))->save($this->ip('192.0.2.1', \Drupal\country_access_filter\IpAccess::Denied, 'US'));
+
     self::assertFalse($service->hasAccess(new IpInput('192.0.2.1')));
+
     $this->container->get('config.factory')->getEditable('country_access_filter.settings')->set('country_access_mode', 'deny')->save();
+
     self::assertTrue($service->isCountryAllowed('US'));
     self::assertTrue($service->hasAccess(new IpInput('192.0.2.1')));
     self::assertTrue($this->storedAccess());
@@ -140,8 +146,11 @@ final class CountryServiceTest extends AuditTestBase {
    */
   public function testUnrelatedConfigSaveDoesNotResetIpBan(): void {
     $this->configurePolicy();
+
     (new IpStorage($this->db))->save($this->ip('192.0.2.1', \Drupal\country_access_filter\IpAccess::Denied));
+
     $this->container->get('config.factory')->getEditable('system.site')->set('name', 'Test')->save();
+
     self::assertFalse($this->storedAccess());
   }
 

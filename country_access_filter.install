@@ -463,6 +463,7 @@ function country_access_filter_update_10010(): void {
 function country_access_filter_update_10011(): void {
   $database = Drupal::database();
   $transaction = $database->startTransaction();
+
   try {
     // Historical autobans overwrote the country with XX. Forget these decisions
     // so the next request resolves the country again, including legitimate XX.
@@ -478,6 +479,7 @@ function country_access_filter_update_10011(): void {
   }
   catch (\Throwable $exception) {
     $transaction->rollBack();
+
     throw $exception;
   }
 }

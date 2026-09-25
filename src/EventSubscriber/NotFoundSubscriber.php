@@ -24,8 +24,6 @@ class NotFoundSubscriber implements EventSubscriberInterface {
 
   /**
    * The logger for country access and 404 tracking events.
-   *
-   * @var \Drupal\Core\Logger\LoggerChannelInterface
    */
   protected LoggerChannelInterface $logger;
 
@@ -106,6 +104,7 @@ class NotFoundSubscriber implements EventSubscriberInterface {
           $this->logger->error('Failed to ban IP @ip after exceeding 404s.', [
             '@ip' => $ip->toReadable(),
           ]);
+
           return;
         }
 

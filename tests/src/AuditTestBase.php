@@ -28,8 +28,6 @@ abstract class AuditTestBase extends TestCase {
 
   /**
    * The service container used by the test.
-   *
-   * @var \Drupal\Core\DependencyInjection\ContainerBuilder
    */
   protected ContainerBuilder $container;
 
@@ -66,7 +64,9 @@ abstract class AuditTestBase extends TestCase {
     $this->container->set('country_manager', $countries);
     $this->container->set('country_access_filter.country_service', $service);
     $this->container->set('country_access_filter.ip_storage', $ipStorage);
+    $this->container->set('http_client', $this->createMock(\GuzzleHttp\ClientInterface::class));
     $this->container->set('cache_tags.invalidator', $this->createMock(\Drupal\Core\Cache\CacheTagsInvalidatorInterface::class));
+
     return $service;
   }
 
@@ -86,10 +86,12 @@ abstract class AuditTestBase extends TestCase {
     $this->db = Database::getConnection('default', 'caf_audit');
     $this->container = new ContainerBuilder();
     $this->container->set('database', $this->db);
+    $this->container->set('messenger', $this->createMock(\Drupal\Core\Messenger\MessengerInterface::class));
     $translation = $this->createMock(TranslationInterface::class);
     $translation->method('translateString')->willReturnCallback(fn($markup) => $markup->getUntranslatedString());
     $this->container->set('string_translation', $translation);
     \Drupal::setContainer($this->container);
+
     foreach (country_access_filter_schema() as $name => $spec) {
       $this->db->schema()->createTable($name, $spec);
     }
@@ -120,6 +122,7 @@ abstract class AuditTestBase extends TestCase {
     $config->method('get')->willReturnCallback(fn($key) => $values[$key] ?? NULL);
     $factory = $this->createMock(ConfigFactoryInterface::class);
     $factory->method('get')->willReturn($config);
+
     return $factory;
   }
 

@@ -103,6 +103,7 @@ class CountryService {
       }
 
       $country_code = $data['countryCode'] ?? static::COUNTRY_CODE_UNDEFINED;
+
       if (!is_string($country_code) || !preg_match('/^[A-Z]{2}$/D', $country_code)) {
         return NULL;
       }

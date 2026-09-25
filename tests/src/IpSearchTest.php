@@ -73,6 +73,7 @@ final class IpSearchTest extends AuditTestBase {
     $instance = CountryAccessFilterSettingsForm::create($this->container);
     $form = [];
     $state = new FormState();
+
     foreach (['', 'not-an-ip', ['unexpected'], '192.0.2.99'] as $input) {
       $state->set('ip_search_result', $this->ip());
       $state->setValue('ip_search_address', $input);
@@ -83,6 +84,7 @@ final class IpSearchTest extends AuditTestBase {
       self::assertSame('message', $commands[0]['command']);
       self::assertSame('error', $commands[0]['messageOptions']['type']);
     }
+
     self::assertNull($storage->load(new IpInput('192.0.2.99')));
     self::assertCount(0, $handler);
   }

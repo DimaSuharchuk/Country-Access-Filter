@@ -51,12 +51,15 @@ final class SubscriberTest extends AuditTestBase {
     $stack = new RequestStack();
     $stack->push($request);
     $logger = $this->createMock(LoggerChannelInterface::class);
+
     $logger->method('info')->willReturnCallback(function ($message, $context) {
       $this->logContexts[] = [$message, $context];
     });
+
     $logger->method('error')->willReturnCallback(function ($message, $context) {
       $this->errors[] = [$message, $context];
     });
+
     $factory = $this->createMock(LoggerChannelFactoryInterface::class);
     $factory->method('get')->willReturn($logger);
     $subscriber = new NotFoundSubscriber($this->configFactory($config), $this->db, $stack, $factory, $ipStorage ?? new IpStorage($this->db), $trackerStorage ?? new Tracker404Storage($this->db));
@@ -68,10 +71,12 @@ final class SubscriberTest extends AuditTestBase {
    */
   public function testBanAtThresholdAndCleanup(): void {
     (new IpStorage($this->db))->save($this->ip());
+
     for ($i = 1; $i < 5; $i++) {
       $this->track();
       self::assertTrue($this->storedAccess());
     }
+
     $this->track();
     self::assertFalse($this->storedAccess());
     self::assertNull((new Tracker404Storage($this->db))->load($this->ip()));
@@ -259,6 +264,7 @@ final class SubscriberTest extends AuditTestBase {
     $event = new RequestEvent($this->createMock(HttpKernelInterface::class), $request, $type);
     (new Subscriber($stack, $this->configFactory(['enabled' => $enabled]), $user, $service))->onKernelRequest($event);
     self::assertSame($blocked, $event->hasResponse());
+
     if ($blocked) {
       self::assertSame(503, $event->getResponse()->getStatusCode());
     }

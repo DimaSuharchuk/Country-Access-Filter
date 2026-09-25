@@ -8,7 +8,9 @@ use Drupal\Core\Ajax\InvokeCommand;
 use Drupal\Core\Ajax\MessageCommand;
 use Drupal\Core\Ajax\RemoveCommand;
 use Drupal\Core\Controller\ControllerBase;
+use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Link;
+use Drupal\Core\Locale\CountryManagerInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\country_access_filter\DTO\Ip;
 use Drupal\country_access_filter\DTO\IpInput;
@@ -25,14 +27,31 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class FormController extends ControllerBase {
 
-  private CountryService $countryService;
-
-  private ClientInterface $httpClient;
-
-  private IpStorage $ipStorage;
+  // The settings form retains this controller when Drupal caches the form.
+  use DependencySerializationTrait;
 
   /**
-   * Creates the controller with its required module services.
+   * The country access service.
+   */
+  protected CountryService $countryService;
+
+  /**
+   * The HTTP client for IP information requests.
+   */
+  protected ClientInterface $httpClient;
+
+  /**
+   * The IP storage service.
+   */
+  protected IpStorage $ipStorage;
+
+  /**
+   * The country names' provider.
+   */
+  protected CountryManagerInterface $countryManager;
+
+  /**
+   * Creates the controller with its required services.
    *
    * @param \Symfony\Component\DependencyInjection\ContainerInterface $container
    *   The service container.
@@ -46,6 +65,7 @@ class FormController extends ControllerBase {
     $instance->countryService = $container->get('country_access_filter.country_service');
     $instance->httpClient = $container->get('http_client');
     $instance->ipStorage = $container->get('country_access_filter.ip_storage');
+    $instance->countryManager = $container->get('country_manager');
 
     return $instance;
   }
@@ -73,7 +93,8 @@ class FormController extends ControllerBase {
    *   The translated dialog title.
    */
   public function countryDetailsTitle(string $country): TranslatableMarkup {
-    $name = \Drupal::service('country_manager')->getList()[$country] ?? $this->t('Unknown country');
+    $name = $this->countryManager->getList()[$country] ?? $this->t('Unknown country');
+
     return $this->t('@country (@code) IPs', ['@country' => $name, '@code' => $country]);
   }
 

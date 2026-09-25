@@ -5,7 +5,6 @@ namespace Drupal\country_access_filter\Form;
 use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Ajax\MessageCommand;
 use Drupal\Core\Ajax\OpenModalDialogCommand;
-use Drupal\Core\Database\Connection;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Link;
@@ -23,32 +22,24 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 class CountryAccessFilterSettingsForm extends ConfigFormBase {
 
   /**
-   * The Drupal database connection.
-   *
-   * @var \Drupal\Core\Database\Connection|null
-   */
-  protected ?Connection $db;
-
-  /**
    * The service that provides the list of countries.
-   *
-   * @var \Drupal\Core\Locale\CountryManagerInterface
    */
   protected CountryManagerInterface $countries;
 
   /**
    * The service that evaluates country access rules.
-   *
-   * @var \Drupal\country_access_filter\Service\CountryService
    */
   protected CountryService $countryService;
 
   /**
    * The storage service for IP access decisions.
-   *
-   * @var \Drupal\country_access_filter\Service\storage\IpStorage
    */
   protected IpStorage $ipStorage;
+
+  /**
+   * The controller that builds shared IP tables and dialog titles.
+   */
+  protected FormController $ipController;
 
   /**
    * Creates the settings form with its required module services.
@@ -62,10 +53,10 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
   public static function create(ContainerInterface $container): static {
     $instance = parent::create($container);
 
-    $instance->db = $container->get('database');
     $instance->countries = $container->get('country_manager');
     $instance->countryService = $container->get('country_access_filter.country_service');
     $instance->ipStorage = $container->get('country_access_filter.ip_storage');
+    $instance->ipController = FormController::create($container);
 
     return $instance;
   }
@@ -350,6 +341,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
     $ip_input = new IpInput(is_string($input) ? trim($input) : '');
     $form_state->set('ip_search_result', NULL);
     $form_state->set('ip_search_error', NULL);
+
     if (!$ip_input->isValid()) {
       $form_state->set('ip_search_error', $this->t('Enter a valid IPv4 or IPv6 address.'));
     }
@@ -357,10 +349,12 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       $this->countryService->hasAccess($ip_input);
       $ip = $this->ipStorage->load($ip_input);
       $form_state->set('ip_search_result', $ip);
+
       if (!$ip) {
         $form_state->set('ip_search_error', $this->t('The IP address could not be looked up or saved. Please try again.'));
       }
     }
+
     $form_state->setRebuild();
   }
 
@@ -377,17 +371,19 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
    */
   public function ipSearchAjaxCallback(array &$form, FormStateInterface $form_state): AjaxResponse {
     $response = new AjaxResponse();
+
     if ($error = $form_state->get('ip_search_error')) {
       return $response->addCommand(new MessageCommand($error, NULL, ['type' => 'error']));
     }
+
     if ($ip = $form_state->get('ip_search_result')) {
-      $controller = FormController::create(\Drupal::getContainer());
       $response->addCommand(new OpenModalDialogCommand(
-        $controller->countryDetailsTitle($ip->getCountryCode()),
-        $controller->buildIpTable([$ip]),
+        $this->ipController->countryDetailsTitle($ip->getCountryCode()),
+        $this->ipController->buildIpTable([$ip]),
         ['width' => 800],
       ));
     }
+
     return $response;
   }
 
