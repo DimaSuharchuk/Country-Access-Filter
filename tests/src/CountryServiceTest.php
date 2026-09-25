@@ -263,4 +263,40 @@ final class CountryServiceTest extends AuditTestBase {
     self::assertSame('', $handler->getLastRequest()->getUri()->getQuery());
   }
 
+  /**
+   * Tests IP info populates the cache even when filtering is disabled.
+   */
+  public function testFullLookupCachesWhileDisabled(): void {
+    $this->configurePolicy(['enabled' => FALSE]);
+    $handler = new MockHandler([new Response(200, [], '{"status":"success","countryCode":"UA"}')]);
+    $service = $this->service($handler, ['enabled' => FALSE]);
+    $input = new IpInput('2001:db8::123');
+    $this->container->set('country_access_filter.country_service', $service);
+    $controller = \Drupal\country_access_filter\Controller\FormController::create($this->container);
+    $response = $controller->ipInfoCallback($input->getId());
+    $stored = (new IpStorage($this->db))->load($input);
+
+    self::assertSame(200, $response->getStatusCode());
+    self::assertSame('UA', $stored->getCountryCode());
+    self::assertTrue($stored->isAllowed());
+    self::assertFalse($stored->isAccessLocked());
+    self::assertTrue($this->service($handler, ['enabled' => TRUE])->hasAccess($input));
+    self::assertCount(0, $handler, 'Enabling filtering must reuse the cached decision.');
+  }
+
+  /**
+   * Tests fresh IP information never overwrites an existing manual decision.
+   */
+  public function testFullLookupPreservesManualDecision(): void {
+    $storage = new IpStorage($this->db);
+    $storage->deny($this->ip());
+    $handler = new MockHandler([new Response(200, [], '{"status":"success","countryCode":"US"}')]);
+    $this->service($handler)->getIpInfo(new IpInput('192.0.2.1'), TRUE);
+    $stored = (new IpStorage($this->db))->load(new IpInput('192.0.2.1'));
+
+    self::assertSame('UA', $stored->getCountryCode());
+    self::assertFalse($stored->isAllowed());
+    self::assertTrue($stored->isAccessLocked());
+  }
+
 }

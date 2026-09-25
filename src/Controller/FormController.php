@@ -14,6 +14,7 @@ use Drupal\Core\Locale\CountryManagerInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\country_access_filter\DTO\Ip;
 use Drupal\country_access_filter\DTO\IpInput;
+use Drupal\country_access_filter\DTO\IpInterface;
 use Drupal\country_access_filter\IpAccess;
 use Drupal\country_access_filter\Service\CountryService;
 use Drupal\country_access_filter\Service\storage\IpStorage;
@@ -220,7 +221,7 @@ class FormController extends ControllerBase {
   }
 
   /**
-   * Fetches plain-text geolocation information for a stored IP address.
+   * Fetches plain-text geolocation information and caches newly discovered IPs.
    *
    * @param string $ip_input
    *   The IP address to look up.
@@ -229,16 +230,16 @@ class FormController extends ControllerBase {
    *   The IP address and provider response, or a bad-request response.
    */
   public function ipInfoCallback(string $ip_input): Response {
-    if (!$ip = $this->ipStorage->load(new IpInput($ip_input))) {
+    $ip = new IpInput($ip_input);
+
+    if (!$ip->isValid()) {
       return new Response((string) $this->t('Invalid IP address.'), Response::HTTP_BAD_REQUEST, [
         'Content-Type' => 'text/plain; charset=UTF-8',
       ]);
     }
 
-    $readable_ip = $ip->toReadable();
-
     try {
-      $data = $this->countryService->getIpInfo(new IpInput($readable_ip), TRUE);
+      $data = $this->countryService->getIpInfo($ip, TRUE);
       $status = Response::HTTP_OK;
     }
     catch (RuntimeException $exception) {
@@ -246,7 +247,7 @@ class FormController extends ControllerBase {
       $status = Response::HTTP_SERVICE_UNAVAILABLE;
     }
 
-    return new Response($readable_ip . PHP_EOL . PHP_EOL . print_r($data, TRUE), $status, [
+    return new Response($ip->toReadable() . PHP_EOL . PHP_EOL . print_r($data, TRUE), $status, [
       'Content-Type' => 'text/plain; charset=UTF-8',
     ]);
   }
@@ -402,13 +403,13 @@ class FormController extends ControllerBase {
   /**
    * Builds a link to the IP geolocation details page.
    *
-   * @param \Drupal\country_access_filter\DTO\Ip $ip
+   * @param \Drupal\country_access_filter\DTO\IpInterface $ip
    *   The IP address to look up.
    *
    * @return \Drupal\Core\Link
    *   The IP information link.
    */
-  private function getIpInfoLink(Ip $ip): Link {
+  public function getIpInfoLink(IpInterface $ip): Link {
     return Link::createFromRoute(
       $this->t('IP info'),
       'country_access_filter.form.country.details.ip.info',
@@ -416,6 +417,7 @@ class FormController extends ControllerBase {
       [
         'attributes' => [
           'target' => '_blank',
+          'rel' => 'noopener',
           'class' => ['caf-action'],
         ],
       ],

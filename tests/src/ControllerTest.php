@@ -70,14 +70,14 @@ final class ControllerTest extends AuditTestBase {
   }
 
   /**
-   * Tests unknown ip info is bad request.
+   * Tests invalid IP input is rejected before querying the provider.
    */
-  public function testUnknownIpInfoIsBadRequest(): void {
+  public function testInvalidIpInfoIsBadRequest(): void {
     $controller = $this->controller();
     $property = new \ReflectionProperty($controller, 'ipStorage');
     $property->setValue($controller, new IpStorage($this->db));
 
-    self::assertSame(400, $controller->ipInfoCallback('192.0.2.9')->getStatusCode());
+    self::assertSame(400, $controller->ipInfoCallback('not-an-ip')->getStatusCode());
   }
 
   /**
@@ -95,7 +95,7 @@ final class ControllerTest extends AuditTestBase {
   /**
    * Tests administrative IP information uses the shared provider handling.
    */
-  public function testIpInfoUsesCountryService(): void {
+  public function testIpInfoUsesCountryServiceWithoutStoredIp(): void {
     $controller = $this->controller();
     $service = $this->getMockBuilder(CountryService::class)->disableOriginalConstructor()->getMock();
     $service->expects(self::once())->method('getIpInfo')
@@ -103,6 +103,7 @@ final class ControllerTest extends AuditTestBase {
       ->willReturn(['status' => 'success', 'countryCode' => 'UA']);
     $property = new \ReflectionProperty($controller, 'countryService');
     $property->setValue($controller, $service);
+    (new \ReflectionProperty($controller, 'ipStorage'))->setValue($controller, new IpStorage($this->db));
 
     self::assertSame(200, $controller->ipInfoCallback('192.0.2.1')->getStatusCode());
   }

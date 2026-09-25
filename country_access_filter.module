@@ -5,6 +5,12 @@
  * The module main file.
  */
 
+use Drupal\Core\Access\AccessResult;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\Core\Template\Attribute;
+use Drupal\country_access_filter\Controller\FormController;
+use Drupal\country_access_filter\DTO\IpInput;
+
 /**
  * Implements hook_toolbar_alter().
  *
@@ -13,4 +19,52 @@
  */
 function country_access_filter_toolbar_alter(&$items) {
   $items['administration']['tray']['#attached']['library'][] = 'country_access_filter/menu';
+}
+
+/**
+ * Implements hook_preprocess_table().
+ */
+function country_access_filter_preprocess_table(array &$variables): void {
+  $attributes = $variables['attributes'];
+  $is_event = $attributes instanceof Attribute
+    ? $attributes->hasClass('dblog-event')
+    : in_array('dblog-event', $attributes['class'] ?? [], TRUE);
+
+  if (!$is_event) {
+    return;
+  }
+
+  $hostname = NULL;
+  $operations = NULL;
+
+  // Match untranslated labels rather than row offsets or the display language.
+  foreach ($variables['rows'] as $key => $row) {
+    $label = $row['cells'][0]['content'] ?? NULL;
+
+    if (!$label instanceof TranslatableMarkup) {
+      continue;
+    }
+
+    if ($label->getUntranslatedString() === 'Hostname') {
+      $hostname = $row['cells'][1]['content'] ?? NULL;
+    }
+    elseif ($label->getUntranslatedString() === 'Operations') {
+      $operations = $key;
+    }
+  }
+
+  $ip = new IpInput($hostname);
+
+  if (!$ip->isValid() || $operations === NULL) {
+    return;
+  }
+
+  $link = FormController::create(Drupal::getContainer())->getIpInfoLink($ip)->toRenderable();
+  $link['#access'] = AccessResult::allowedIfHasPermission(Drupal::currentUser(), 'administer site configuration');
+  $link['#prefix'] = ' ';
+  $content = &$variables['rows'][$operations]['cells'][1]['content'];
+  $content = [
+    'existing' => $content,
+    'ip_info' => $link,
+  ];
 }

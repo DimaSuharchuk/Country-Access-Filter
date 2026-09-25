@@ -76,17 +76,16 @@ class CountryService {
         return FALSE;
       }
 
-      $access = $this->isCountryAllowed($country_code) ? IpAccess::Allowed : IpAccess::Denied;
+      $ip = $this->ipStorage->load($ip_input);
 
-      $ip = new Ip($ip_input->getStorableValue(), $access, $country_code);
-      $this->ipStorage->save($ip);
+      return $ip ? $ip->isAllowed() : $this->isCountryAllowed($country_code);
     }
 
     return $ip->isAllowed();
   }
 
   /**
-   * Looks up the country code for a valid IP address.
+   * Looks up the country code and caches a newly discovered IP address.
    *
    * @param \Drupal\country_access_filter\DTO\IpInput $ip
    *   The IP address to look up.
@@ -108,7 +107,7 @@ class CountryService {
   }
 
   /**
-   * Fetches validated geolocation data and logs provider failures.
+   * Fetches geolocation data, caches new IPs, and logs provider failures.
    *
    * @param \Drupal\country_access_filter\DTO\IpInput $ip
    *   The IP address to look up.
@@ -116,7 +115,8 @@ class CountryService {
    *   Whether to request all fields for the administrative information page.
    *
    * @return array
-   *   A successful provider response with a valid country code.
+   *   A successful provider response with a valid country code. New IPs are
+   *   stored under the saved country policy, even when filtering is disabled.
    *
    * @throws \RuntimeException
    *   When the provider is unavailable or returns an error or invalid data.
@@ -159,8 +159,6 @@ class CountryService {
       if (!is_string($data['countryCode'] ?? NULL) || !preg_match('/^[A-Z]{2}$/D', $data['countryCode'])) {
         throw new RuntimeException('Geolocation service returned an invalid or missing country code.');
       }
-
-      return $data;
     }
     catch (GuzzleException | RuntimeException $exception) {
       $message = $exception instanceof GuzzleException
@@ -173,6 +171,13 @@ class CountryService {
 
       throw new RuntimeException($message, 0, $exception);
     }
+
+    if (!$this->ipStorage->load($ip)) {
+      $access = $this->isCountryAllowed($data['countryCode']) ? IpAccess::Allowed : IpAccess::Denied;
+      $this->ipStorage->save(new Ip($ip->getStorableValue(), $access, $data['countryCode']));
+    }
+
+    return $data;
   }
 
   /**
