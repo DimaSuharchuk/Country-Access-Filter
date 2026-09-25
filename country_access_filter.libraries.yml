@@ -7,3 +7,8 @@ style:
   css:
     component:
       css/form.css: { }
+
+country_picker:
+  css:
+    component:
+      css/country-picker.css: { }

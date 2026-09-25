@@ -124,14 +124,26 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       '#default_value' => $config->get('country_access_mode') ?? AccessMode::ALLOW->value,
     ];
 
+    $options = $this->countries->getList();
+    uasort($options, static fn($a, $b) => strnatcasecmp((string) $a, (string) $b));
+    $selected = preg_split('/\s+/', trim((string) $config->get('countries')), -1, PREG_SPLIT_NO_EMPTY);
+    $selected_options = array_intersect_key($options, array_flip($selected));
+    $other_options = array_diff_key($options, $selected_options);
+
     $form['countries_wrapper']['countries'] = [
-      '#type' => 'select',
+      '#type' => 'checkboxes',
       '#title' => $this->t('Countries'),
-      '#default_value' => explode(' ', $config->get('countries')),
-      '#options' => $this->countries->getList(),
-      '#multiple' => TRUE,
-      '#chosen' => TRUE,
+      '#default_value' => array_keys($selected_options),
+      '#options' => $selected_options + $other_options,
+      '#description' => $this->t('Selected countries follow the access mode above. Saved selections appear first; new selections move to the top after saving.'),
+      '#prefix' => '<div class="caf-country-picker">',
+      '#suffix' => '</div>',
+      '#attached' => ['library' => ['country_access_filter/country_picker']],
     ];
+
+    if ($selected_options && $other_options) {
+      $form['countries_wrapper']['countries'][array_key_first($other_options)]['#wrapper_attributes']['class'][] = 'caf-country-picker__other';
+    }
 
     $form['track_404_wrapper'] = [
       '#type' => 'fieldset',
@@ -301,7 +313,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
    *   The submitted form state.
    */
   public function validateForm(array &$form, FormStateInterface $form_state): void {
-    foreach ($form_state->getValue('countries') as $country_code) {
+    foreach (array_filter($form_state->getValue('countries', [])) as $country_code) {
       if (!preg_match('/^[A-Z]{2}$/', $country_code)) {
         $form_state->setErrorByName('countries', $this->t('Invalid country code: %code. Please use ISO 3166-1 alpha-2 codes.', ['%code' => $country_code]));
       }
@@ -329,7 +341,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
     $access_mode = $form_state->getValue('country_access_mode');
     $is_access_allowed = $access_mode == AccessMode::ALLOW->value;
 
-    $selected_countries = $form_state->getValue('countries');
+    $selected_countries = array_filter($form_state->getValue('countries', []));
 
     $config
       ->set('enabled', $form_state->getValue('enabled'))

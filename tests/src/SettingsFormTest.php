@@ -55,4 +55,40 @@ final class SettingsFormTest extends AuditTestBase {
     self::assertFalse($this->storedAccess());
   }
 
+  /**
+   * Tests unchecked checkbox values are omitted from stored configuration.
+   */
+  public function testCheckboxSubmission(): void {
+    $this->submit(['countries' => ['UA' => 'UA', 'US' => 0, 'UG' => 0]]);
+    self::assertSame('UA', $this->container->get('config.factory')->get('country_access_filter.settings')->get('countries'));
+    $this->submit(['countries' => ['UA' => 0, 'US' => 0, 'UG' => 0]]);
+    self::assertSame('', $this->container->get('config.factory')->get('country_access_filter.settings')->get('countries'));
+  }
+
+  /**
+   * Tests validation accepts selected and unchecked checkbox entries.
+   */
+  public function testCheckboxValidation(): void {
+    $this->configurePolicy();
+    $form = [];
+    $state = new FormState();
+    $state->setValues(['countries' => ['UA' => 'UA', 'US' => 0]]);
+    $instance = CountryAccessFilterSettingsForm::create($this->container);
+    $instance->validateForm($form, $state);
+    self::assertSame([], $state->getErrors());
+  }
+
+  /**
+   * Tests saved selections come first, with alphabetical order in each group.
+   */
+  public function testCountryOrder(): void {
+    $this->configurePolicy(['countries' => "US\nUA"]);
+    $form = CountryAccessFilterSettingsForm::create($this->container)->buildForm([], new FormState());
+    $picker = $form['countries_wrapper']['countries'];
+    self::assertSame('checkboxes', $picker['#type']);
+    self::assertSame(['UA', 'US', 'UG'], array_keys($picker['#options']));
+    self::assertSame(['UA', 'US'], $picker['#default_value']);
+    self::assertContains('caf-country-picker__other', $picker['UG']['#wrapper_attributes']['class']);
+  }
+
 }

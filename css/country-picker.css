@@ -1,0 +1,63 @@
+/**
+ * Native country checkboxes: saved selections first, stable order while editing.
+ */
+.caf-country-picker .form-checkboxes {
+  max-block-size: 24rem;
+  max-inline-size: 36rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  border: 1px solid #a6a6a6;
+  border-radius: 0.25rem;
+  background: #fff;
+  color: #232429;
+}
+
+.caf-country-picker .form-checkboxes .form-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+}
+
+.caf-country-picker .form-checkboxes input[type="checkbox"] {
+  position: absolute;
+  inset-inline-start: 0.875rem;
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+  float: none;
+  margin: 0;
+}
+
+.caf-country-picker .form-checkboxes label.option {
+  display: block;
+  flex: 1;
+  margin: 0;
+  padding: 0.625rem 0.875rem;
+  padding-inline-start: 2.75rem;
+  cursor: pointer;
+  color: inherit;
+}
+
+.caf-country-picker .form-checkboxes .form-item:has(input:checked) {
+  background: #e8f0fe;
+  font-weight: 600;
+}
+
+.caf-country-picker .form-checkboxes .form-item:hover {
+  background: #f1f4f8;
+}
+
+.caf-country-picker .form-checkboxes .form-item:focus-within {
+  outline: 2px solid #005fcc;
+  outline-offset: -2px;
+}
+
+.caf-country-picker .form-checkboxes .caf-country-picker__other {
+  border-block-start: 2px solid #a6a6a6;
+}
+
+.caf-country-picker input:checked + label.option {
+  font-weight: 600;
+}
