@@ -4,3 +4,7 @@ country_access_filter.admin:
   parent: system.admin
   route_name: country_access_filter.settings
   weight: 11
+  options:
+    icon:
+      pack_id: country_access_filter
+      icon_id: menu

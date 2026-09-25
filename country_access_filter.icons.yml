@@ -1,0 +1,11 @@
+country_access_filter:
+  label: Country Access Filter
+  extractor: svg
+  config:
+    sources:
+      - icons/menu.svg
+  template: >-
+    <svg {{ attributes
+      .setAttribute('aria-hidden', 'true')
+      .setAttribute('focusable', 'false')
+    }}>{{ content }}</svg>
