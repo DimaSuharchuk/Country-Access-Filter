@@ -59,7 +59,7 @@ class FormController extends ControllerBase {
    * @return array
    *   The render array for the country IP table.
    */
-  public function countryDetailsAjaxCallback($country): array {
+  public function countryDetailsAjaxCallback(string $country): array {
     $table = [
       '#theme' => 'table',
       '#header' => [
@@ -75,7 +75,6 @@ class FormController extends ControllerBase {
       ],
     ];
 
-    /** @var Ip $ip */
     foreach ($this->ipStorage->loadByCountry($country) as $ip) {
       $table['#rows'][] = [
         'data' => [

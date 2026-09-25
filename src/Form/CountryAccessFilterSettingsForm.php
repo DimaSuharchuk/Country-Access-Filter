@@ -184,7 +184,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
     $form['info'] = [
       '#type' => 'details',
       '#title' => $this->t('Info'),
-      '#open' => FALSE,
+      '#open' => TRUE,
     ];
     $form['info']['ips_all'] = [
       '#type' => 'item',
@@ -254,7 +254,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
     $form['info']['countries'] = [
       '#type' => 'details',
       '#title' => $this->t('Countries'),
-      '#open' => TRUE,
+      '#open' => FALSE,
     ];
     $form['info']['countries']['table_legend'] = [
       '#theme' => 'item_list',
