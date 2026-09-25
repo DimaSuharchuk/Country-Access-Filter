@@ -95,7 +95,10 @@ class CountryService {
     }
 
     try {
-      $response = $this->httpClient->request('GET', "http://ip-api.com/json/{$ip->toReadable()}?fields=countryCode");
+      $response = $this->httpClient->request('GET', "http://ip-api.com/json/{$ip->toReadable()}?fields=countryCode", [
+        'connect_timeout' => 2,
+        'timeout' => 5,
+      ]);
       $data = $this->serialization->decode($response->getBody()->getContents());
 
       if (!is_array($data)) {

@@ -245,7 +245,10 @@ class FormController extends ControllerBase {
     $readable_ip = $ip->toReadable();
 
     try {
-      $response = $this->httpClient->request('GET', "http://ip-api.com/json/$readable_ip");
+      $response = $this->httpClient->request('GET', "http://ip-api.com/json/$readable_ip", [
+        'connect_timeout' => 2,
+        'timeout' => 5,
+      ]);
       $data = json_decode($response->getBody()->getContents(), TRUE) ?: [];
     }
     catch (GuzzleException $exception) {

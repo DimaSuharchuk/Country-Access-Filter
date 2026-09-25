@@ -92,4 +92,19 @@ final class ControllerTest extends AuditTestBase {
     self::assertSame('Unknown country (XX) IPs', (string) $controller->countryDetailsTitle('XX'));
   }
 
+  /**
+   * Tests the administrative IP information request also has time limits.
+   */
+  public function testIpInfoTimeouts(): void {
+    $controller = $this->controller();
+    $client = $this->createMock(ClientInterface::class);
+    $client->expects(self::once())->method('request')
+      ->with('GET', 'http://ip-api.com/json/192.0.2.1', ['connect_timeout' => 2, 'timeout' => 5])
+      ->willReturn(new \GuzzleHttp\Psr7\Response(200, [], '{}'));
+    $property = new \ReflectionProperty($controller, 'httpClient');
+    $property->setValue($controller, $client);
+
+    self::assertSame(200, $controller->ipInfoCallback('192.0.2.1')->getStatusCode());
+  }
+
 }

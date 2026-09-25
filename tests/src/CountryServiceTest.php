@@ -162,4 +162,15 @@ final class CountryServiceTest extends AuditTestBase {
     self::assertFalse($this->service(new MockHandler([]), ['countries' => 'US'])->isCountryAllowed('UA'));
   }
 
+  /**
+   * Tests visitor lookups have bounded connection and total request times.
+   */
+  public function testLookupTimeouts(): void {
+    $handler = new MockHandler([new Response(200, [], '{"countryCode":"UA"}')]);
+    $this->service($handler)->hasAccess(new IpInput('192.0.2.1'));
+
+    self::assertSame(2, $handler->getLastOptions()['connect_timeout']);
+    self::assertSame(5, $handler->getLastOptions()['timeout']);
+  }
+
 }
