@@ -20,11 +20,14 @@ class Ip implements IpInterface {
    *   The access decision for this IP address.
    * @param string $countryCode
    *   The ISO 3166-1 alpha-2 country code.
+   * @param bool $accessLocked
+   *   Whether country configuration must leave the access decision unchanged.
    */
   public function __construct(
     private readonly string $ipPacked,
     private readonly IpAccess $access,
     private readonly string $countryCode,
+    private readonly bool $accessLocked = FALSE,
   ) {}
 
   /** {@inheritdoc} */
@@ -50,6 +53,16 @@ class Ip implements IpInterface {
    */
   public function isAllowed(): bool {
     return $this->getAccess() === IpAccess::Allowed;
+  }
+
+  /**
+   * Determines whether the access decision is independent of country rules.
+   *
+   * @return bool
+   *   TRUE for a manual decision or an automatic 404 ban.
+   */
+  public function isAccessLocked(): bool {
+    return $this->accessLocked;
   }
 
   /**

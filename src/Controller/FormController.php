@@ -128,7 +128,7 @@ class FormController extends ControllerBase {
 
     // Update in DB.
     $new_access = $access === 1 ? IpAccess::Allowed : IpAccess::Denied;
-    $ip = new Ip($ip->getStorableValue(), $new_access, $ip->getCountryCode());
+    $ip = new Ip($ip->getStorableValue(), $new_access, $ip->getCountryCode(), TRUE);
 
     if ($this->ipStorage->save($ip)) {
       // Update in the table.

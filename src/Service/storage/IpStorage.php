@@ -87,7 +87,7 @@ class IpStorage {
           ->condition('ip', array_map(fn(IpInterface $ip): string => $ip->getStorableValue(), $to_load), 'IN');
 
         foreach ($query->execute() as $object) {
-          $ip = new Ip($object->ip, $object->access == 1 ? IpAccess::Allowed : IpAccess::Denied, $object->country_code);
+          $ip = new Ip($object->ip, $object->access == 1 ? IpAccess::Allowed : IpAccess::Denied, $object->country_code, (bool) $object->access_locked);
           $this->list[$ip->getId()] = $ip;
         }
       }
@@ -135,7 +135,7 @@ class IpStorage {
         ->condition($property, $values, is_array($values) ? 'IN' : '=');
 
       foreach ($query->execute() as $object) {
-        $ip = new Ip($object->ip, $object->access == 1 ? IpAccess::Allowed : IpAccess::Denied, $object->country_code);
+        $ip = new Ip($object->ip, $object->access == 1 ? IpAccess::Allowed : IpAccess::Denied, $object->country_code, (bool) $object->access_locked);
         $this->list[$ip->getId()] = $ips[$ip->getId()] = $ip;
       }
     }
@@ -163,6 +163,7 @@ class IpStorage {
         ->fields([
           'access' => (int) ($ip->isAllowed()),
           'country_code' => $ip->getCountryCode(),
+          'access_locked' => (int) $ip->isAccessLocked(),
         ])
         ->execute();
 
@@ -176,7 +177,7 @@ class IpStorage {
   }
 
   /**
-   * Allows the given IP address.
+   * Allows the IP address and locks its decision against country rule changes.
    *
    * @param \Drupal\country_access_filter\DTO\Ip $ip
    *   The IP address to allow.
@@ -185,11 +186,11 @@ class IpStorage {
    *   TRUE if the access decision was saved, or FALSE otherwise.
    */
   public function allow(Ip $ip): bool {
-    return $this->save(new Ip($ip->getStorableValue(), IpAccess::Allowed, $ip->getCountryCode()));
+    return $this->save(new Ip($ip->getStorableValue(), IpAccess::Allowed, $ip->getCountryCode(), TRUE));
   }
 
   /**
-   * Denies the given IP address.
+   * Denies the IP address and locks its decision against country rule changes.
    *
    * @param \Drupal\country_access_filter\DTO\Ip $ip
    *   The IP address to deny.
@@ -198,7 +199,7 @@ class IpStorage {
    *   TRUE if the access decision was saved, or FALSE otherwise.
    */
   public function deny(Ip $ip): bool {
-    return $this->save(new Ip($ip->getStorableValue(), IpAccess::Denied, $ip->getCountryCode()));
+    return $this->save(new Ip($ip->getStorableValue(), IpAccess::Denied, $ip->getCountryCode(), TRUE));
   }
 
   /**
@@ -227,7 +228,7 @@ class IpStorage {
   }
 
   /**
-   * Updates access decisions for the specified countries.
+   * Updates unlocked access decisions for the specified countries.
    *
    * @param string[] $countries
    *   The country codes whose access decisions should be updated.
@@ -239,6 +240,7 @@ class IpStorage {
       $this->db->update(static::TABLE)
         ->fields(['access' => (int) ($access === IpAccess::Allowed)])
         ->condition('country_code', $countries, 'IN')
+        ->condition('access_locked', 0)
         ->execute();
 
       foreach ($this->list as $key => $ip) {

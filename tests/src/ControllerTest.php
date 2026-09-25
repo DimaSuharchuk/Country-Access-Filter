@@ -26,7 +26,11 @@ final class ControllerTest extends AuditTestBase {
   private function controller(bool $saveResult = FALSE, bool $deleteResult = FALSE): FormController {
     $storage = $this->getMockBuilder(IpStorage::class)->disableOriginalConstructor()->onlyMethods(['load', 'save', 'delete'])->getMock();
     $storage->method('load')->willReturn($this->ip());
-    $storage->method('save')->willReturn($saveResult);
+    $storage->method('save')->willReturnCallback(function ($ip) use ($saveResult) {
+      self::assertTrue($ip->isAccessLocked());
+      self::assertSame('UA', $ip->getCountryCode());
+      return $saveResult;
+    });
     $storage->method('delete')->willReturn($deleteResult);
     $this->container->set('country_access_filter.ip_storage', $storage);
     $this->container->set('country_access_filter.country_service', $this->getMockBuilder(CountryService::class)->disableOriginalConstructor()->getMock());

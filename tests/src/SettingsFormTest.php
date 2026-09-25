@@ -28,16 +28,20 @@ final class SettingsFormTest extends AuditTestBase {
     CountryAccessFilterSettingsForm::create($this->container)->submitForm($form, $state);
   }
 
-  /** @group release_2_1 */
+  /**
+   * Tests that a manual decision survives settings form submission.
+   */
   public function testSavingUnchangedCountryPolicyPreservesIndividualBan(): void {
-    (new IpStorage($this->db))->save($this->ip('192.0.2.1', IpAccess::Denied));
+    (new IpStorage($this->db))->deny($this->ip());
     $this->submit(['track_404_threshold' => 10]);
     self::assertFalse($this->storedAccess(), 'Changing only the 404 threshold must not lift individual bans.');
   }
 
-  /** @group release_2_1 */
+  /**
+   * Tests that a manual decision survives settings form submission.
+   */
   public function testSavingUnchangedCountryPolicyPreservesIndividualAllow(): void {
-    (new IpStorage($this->db))->save($this->ip('192.0.2.1', IpAccess::Allowed, 'US'));
+    (new IpStorage($this->db))->allow($this->ip('192.0.2.1', IpAccess::Denied, 'US'));
     $this->submit();
     self::assertTrue($this->storedAccess(), 'Saving country settings must preserve a manual IP exception.');
   }

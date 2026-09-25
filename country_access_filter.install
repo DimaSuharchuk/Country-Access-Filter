@@ -33,6 +33,14 @@ function country_access_filter_schema(): array {
         'size' => 'tiny',
         'not null' => TRUE,
       ],
+      'access_locked' => [
+        'description' => 'Whether the access decision is independent of country rules.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ],
       'country_code' => [
         'description' => 'The ISO 3166-1 alpha-2 country code.',
         'type' => 'char',
@@ -408,4 +416,43 @@ function country_access_filter_update_10009(): void {
   }
 
   $schema->changeField($table, $old_name, $new_name, $spec);
+}
+
+/**
+ * Locks existing IP decisions that differ from the current country policy.
+ */
+function country_access_filter_update_10010(): void {
+  $database = Drupal::database();
+  $table = 'country_access_filter_ips';
+  $schema = $database->schema();
+
+  if (!$schema->fieldExists($table, 'access_locked')) {
+    $schema->addField($table, 'access_locked', country_access_filter_schema()[$table]['fields']['access_locked']);
+  }
+
+  // Infer existing exceptions without changing their access or country.
+  $config = Drupal::config('country_access_filter.settings');
+  $selected = preg_split('/\s+/', trim((string) $config->get('countries')), -1, PREG_SPLIT_NO_EMPTY);
+  $allowed = $config->get('country_access_mode') === AccessMode::ALLOW->value
+    ? $selected
+    : array_diff(array_keys(Drupal::service('country_manager')
+      ->getList()), $selected);
+
+  if ($allowed) {
+    $database->update($table)
+      ->fields(['access_locked' => 1])
+      ->condition('country_code', $allowed, 'IN')
+      ->condition('access', 0)
+      ->execute();
+  }
+
+  $query = $database->update($table)
+    ->fields(['access_locked' => 1])
+    ->condition('access', 1);
+
+  if ($allowed) {
+    $query->condition('country_code', $allowed, 'NOT IN');
+  }
+
+  $query->execute();
 }

@@ -86,6 +86,10 @@ final class SubscriberTest extends AuditTestBase {
     self::assertFalse($this->storedAccess());
     self::assertNull((new Tracker404Storage($this->db))->load($this->ip()));
     self::assertSame('UA', (new IpStorage($this->db))->load(new IpInput('192.0.2.1'))->getCountryCode());
+    self::assertTrue((new IpStorage($this->db))->load(new IpInput('192.0.2.1'))->isAccessLocked());
+    $this->configurePolicy();
+    $this->container->get('config.factory')->getEditable('country_access_filter.settings')->save();
+    self::assertFalse($this->storedAccess());
   }
 
   /**
