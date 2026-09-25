@@ -7,6 +7,9 @@
 
 /**
  * Implements hook_toolbar_alter().
+ *
+ * @param array $items
+ *   The toolbar render array, keyed by toolbar item ID.
  */
 function country_access_filter_toolbar_alter(&$items) {
   $items['administration']['tray']['#attached']['library'][] = 'country_access_filter/menu';

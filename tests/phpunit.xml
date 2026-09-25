@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="bootstrap.php" colors="true" cacheResult="false" failOnWarning="true">
+  <testsuites>
+    <testsuite name="Country Access Filter audit">
+      <directory suffix="Test.php">src</directory>
+    </testsuite>
+  </testsuites>
+  <groups>
+    <exclude>
+      <group>release_2_1</group>
+    </exclude>
+  </groups>
+</phpunit>

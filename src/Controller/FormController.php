@@ -8,52 +8,64 @@ use Drupal\Core\Ajax\InvokeCommand;
 use Drupal\Core\Ajax\MessageCommand;
 use Drupal\Core\Ajax\RemoveCommand;
 use Drupal\Core\Controller\ControllerBase;
-use Drupal\Core\Database\Connection;
 use Drupal\Core\Link;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
-use Drupal\country_access_filter\Service\Helper;
-use Exception;
+use Drupal\country_access_filter\DTO\Ip;
+use Drupal\country_access_filter\DTO\IpInput;
+use Drupal\country_access_filter\IpAccess;
+use Drupal\country_access_filter\Service\CountryService;
+use Drupal\country_access_filter\Service\storage\IpStorage;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Builds country IP details and handles administrative IP actions.
+ */
 class FormController extends ControllerBase {
 
-  private Connection $db;
-
-  private Helper $helper;
+  private CountryService $countryService;
 
   private ClientInterface $httpClient;
 
+  private IpStorage $ipStorage;
+
+  /**
+   * Creates the controller with its required module services.
+   *
+   * @param \Symfony\Component\DependencyInjection\ContainerInterface $container
+   *   The service container.
+   *
+   * @return static
+   *   The initialized controller.
+   */
   public static function create(ContainerInterface $container): static {
     $instance = parent::create($container);
 
-    $instance->db = $container->get('database');
-    $instance->helper = $container->get('country_access_filter.helper');
+    $instance->countryService = $container->get('country_access_filter.country_service');
     $instance->httpClient = $container->get('http_client');
+    $instance->ipStorage = $container->get('country_access_filter.ip_storage');
 
     return $instance;
   }
 
+  /**
+   * Builds the AJAX table of IP addresses for a country.
+   *
+   * @param string $country
+   *   The ISO 3166-1 alpha-2 country code.
+   *
+   * @return array
+   *   The render array for the country IP table.
+   */
   public function countryDetailsAjaxCallback($country): array {
-    try {
-      $rows = $this->db->select('country_access_filter_ips', 'i')
-        ->fields('i', ['ip', 'status'])
-        ->condition('country_code', $country)
-        ->execute()
-        ->fetchAllKeyed();
-    }
-    catch (Exception) {
-      $rows = [];
-    }
-
     $table = [
       '#theme' => 'table',
       '#header' => [
         $this->t('IP'),
-        $this->t('Status'),
         $this->t('Access'),
+        $this->t('Change access'),
         $this->t('Remove from ban list'),
         $this->t('IP info'),
       ],
@@ -63,20 +75,21 @@ class FormController extends ControllerBase {
       ],
     ];
 
-    foreach ($rows as $ip => $status) {
+    /** @var Ip $ip */
+    foreach ($this->ipStorage->loadByCountry($country) as $ip) {
       $table['#rows'][] = [
         'data' => [
           [
-            'data' => $this->ipToReadable($ip),
+            'data' => $ip->toReadable(),
             'class' => ['ip'],
           ],
           [
-            'data' => $this->getIpStatusText($status),
-            'class' => ['status'],
+            'data' => $this->getIpAccessText($ip),
+            'class' => ['access'],
           ],
           [
-            'data' => $this->getIpStatusLink($ip, $status),
-            'class' => ['ip-set-status-link'],
+            'data' => $this->getIpChangeAccessLink($ip),
+            'class' => ['ip-change-access-link'],
           ],
           [
             'data' => $this->getIpRemoveLink($ip),
@@ -88,67 +101,101 @@ class FormController extends ControllerBase {
           ],
         ],
         'class' => ['row'],
-        'data-id' => $ip,
+        'data-id' => $ip->getId(),
       ];
     }
 
     return $table;
   }
 
-  public function ipSetStatusAjaxCallback(int $ip, int $status): AjaxResponse {
+  /**
+   * Changes an IP address's access and updates the AJAX tables.
+   *
+   * @param string $ip_input
+   *   The IP address to update.
+   * @param int $access
+   *   The new access value: 1 to allow or 0 to deny.
+   *
+   * @return \Drupal\Core\Ajax\AjaxResponse
+   *   The commands that update the tables and show the result.
+   */
+  public function ipChangeAccessAjaxCallback(string $ip_input, int $access): AjaxResponse {
     $response = new AjaxResponse();
 
-    $country = $this->getIpCountry($ip);
+    if (!$ip = $this->ipStorage->load(new IpInput($ip_input))) {
+      return $response;
+    }
 
     // Update in DB.
-    try {
-      $this->db->update('country_access_filter_ips')
-        ->fields([
-          'status' => $status,
-        ])
-        ->condition('ip', $ip)
-        ->execute();
-    }
-    catch (Exception) {
-    }
+    $new_access = $access === 1 ? IpAccess::Allowed : IpAccess::Denied;
+    $ip = new Ip($ip->getStorableValue(), $new_access, $ip->getCountryCode());
 
-    // Update in the table.
-    $response->addCommand(new HtmlCommand("tr[data-id=$ip] td.status", $this->getIpStatusText($status)));
-    $link = $this->getIpStatusLink($ip, $status)->toRenderable();
-    $response->addCommand(new HtmlCommand("tr[data-id=$ip] td.ip-set-status-link", $link));
-    // Update in the countries table.
-    $this->addCountryTableRowUpdateCommands($response, $country);
-    // Message.
-    $response->addCommand(new MessageCommand($this->t('Status for IP @ip has been changed.', ['@ip' => $this->ipToReadable($ip)])));
+    if ($this->ipStorage->save($ip)) {
+      // Update in the table.
+      $row_selector = $this->getIpRowSelector($ip);
+      $response->addCommand(new HtmlCommand("$row_selector td.access", $this->getIpAccessText($ip)));
+      $link = $this->getIpChangeAccessLink($ip)->toRenderable();
+      $response->addCommand(new HtmlCommand("$row_selector td.ip-change-access-link", $link));
+      // Update in the countries table.
+      $this->addCountryTableRowUpdateCommands($response, $ip);
+      // Message.
+      $response->addCommand(new MessageCommand($this->t('Access for IP @ip has been changed.', ['@ip' => $ip->toReadable()])));
+    }
+    else {
+      $response->addCommand(new MessageCommand($this->t('Access for IP @ip has not been changed.', ['@ip' => $ip->toReadable()]), NULL, ['type' => 'error']));
+    }
 
     return $response;
   }
 
-  public function ipRemoveAjaxCallback(int $ip): AjaxResponse {
+  /**
+   * Removes an IP address and updates the AJAX tables.
+   *
+   * @param string $ip_input
+   *   The IP address to remove.
+   *
+   * @return \Drupal\Core\Ajax\AjaxResponse
+   *   The commands that update the tables and show the result.
+   */
+  public function ipRemoveAjaxCallback(string $ip_input): AjaxResponse {
     $response = new AjaxResponse();
 
-    try {
-      $country = $this->getIpCountry($ip);
-
-      $this->db->delete('country_access_filter_ips')
-        ->condition('ip', $ip)
-        ->execute();
-
-      // Update in the IPs table.
-      $response->addCommand(new RemoveCommand("tr[data-id=$ip]"));
-      // Update in the countries table.
-      $this->addCountryTableRowUpdateCommands($response, $country);
-      // Message.
-      $response->addCommand(new MessageCommand($this->t('IP @ip has been removed.', ['@ip' => $this->ipToReadable($ip)])));
+    if (!$ip = $this->ipStorage->load(new IpInput($ip_input))) {
+      return $response;
     }
-    catch (Exception) {
+
+    if ($this->ipStorage->delete($ip)) {
+      // Update in the IPs table.
+      $response->addCommand(new RemoveCommand($this->getIpRowSelector($ip)));
+      // Update in the countries table.
+      $this->addCountryTableRowUpdateCommands($response, $ip);
+      // Message.
+      $response->addCommand(new MessageCommand($this->t('IP @ip has been removed.', ['@ip' => $ip->toReadable()])));
+    }
+    else {
+      $response->addCommand(new MessageCommand($this->t('IP @ip has not been removed.', ['@ip' => $ip->toReadable()]), NULL, ['type' => 'error']));
     }
 
     return $response;
   }
 
-  public function ipInfoCallback(int $ip): Response {
-    $readable_ip = $this->ipToReadable($ip);
+  /**
+   * Fetches plain-text geolocation information for a stored IP address.
+   *
+   * @param string $ip_input
+   *   The IP address to look up.
+   *
+   * @return \Symfony\Component\HttpFoundation\Response
+   *   The IP address and provider response, or a bad-request response.
+   */
+  public function ipInfoCallback(string $ip_input): Response {
+    if (!$ip = $this->ipStorage->load(new IpInput($ip_input))) {
+      return new Response((string) $this->t('Invalid IP address.'), Response::HTTP_BAD_REQUEST, [
+        'Content-Type' => 'text/plain; charset=UTF-8',
+      ]);
+    }
+
+    $readable_ip = $ip->toReadable();
 
     try {
       $response = $this->httpClient->request('GET', "http://ip-api.com/json/$readable_ip");
@@ -165,12 +212,17 @@ class FormController extends ControllerBase {
     ]);
   }
 
-  private function addCountryTableRowUpdateCommands(AjaxResponse $response, ?string $country): void {
-    if (!$country) {
-      return;
-    }
-
-    $stats = $this->getCountryStats($country);
+  /**
+   * Updates the country statistics row after changing an IP address.
+   *
+   * @param \Drupal\Core\Ajax\AjaxResponse $response
+   *   The AJAX response to append commands to.
+   * @param \Drupal\country_access_filter\DTO\Ip $ip
+   *   The updated or removed IP address.
+   */
+  private function addCountryTableRowUpdateCommands(AjaxResponse $response, Ip $ip): void {
+    $country = $ip->getCountryCode();
+    $stats = $this->ipStorage->getCountryStats()[$country] ?? FALSE;
     $row_selector = "#country-access-table tr[data-country=$country]";
 
     if (!$stats) {
@@ -187,40 +239,15 @@ class FormController extends ControllerBase {
     }
   }
 
-  private function getCountryStats(string $country): ?object {
-    try {
-      $query = $this->db
-        ->select('country_access_filter_ips', 'i')
-        ->fields('i', ['country_code'])
-        ->condition('country_code', $country)
-        ->groupBy('country_code');
-      $query->addExpression('COUNT(country_code)', 'count');
-      $query->addExpression('SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END)', 'allowed');
-      $query->addExpression('SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END)', 'denied');
-      $stats = $query->execute()->fetchObject();
-    }
-    catch (Exception) {
-      $stats = FALSE;
-    }
-
-    return $stats ?: NULL;
-  }
-
-  private function getIpCountry(int $ip): ?string {
-    try {
-      $country = $this->db->select('country_access_filter_ips', 'i')
-        ->fields('i', ['country_code'])
-        ->condition('ip', $ip)
-        ->execute()
-        ->fetchField();
-    }
-    catch (Exception) {
-      $country = FALSE;
-    }
-
-    return $country ?: NULL;
-  }
-
+  /**
+   * Formats the summary counts for a country table row.
+   *
+   * @param object $stats
+   *   Country counts for total, allowed, and denied IP addresses.
+   *
+   * @return \Drupal\Core\StringTranslation\TranslatableMarkup
+   *   The translated country statistics.
+   */
   private function getCountryStatsText(object $stats): TranslatableMarkup {
     return $this->t('@count (allowed @allowed, denied @denied)', [
       '@count' => $stats->count,
@@ -229,9 +256,20 @@ class FormController extends ControllerBase {
     ]);
   }
 
+  /**
+   * Gets the access indicator classes for a country table row.
+   *
+   * @param string $country
+   *   The country's ISO 3166-1 alpha-2 code.
+   * @param object $stats
+   *   The number of allowed and denied IP addresses for the country.
+   *
+   * @return string[]
+   *   The access classes for the row.
+   */
   private function getCountryRowClasses(string $country, object $stats): array {
     $classes = [];
-    $country_allowed = $this->helper->isCountryAllowed($country);
+    $country_allowed = $this->countryService->isCountryAllowed($country);
 
     if ($country_allowed) {
       $classes[] = 'allowed';
@@ -247,21 +285,50 @@ class FormController extends ControllerBase {
     return $classes;
   }
 
-  private function ipToReadable(int $ip): string {
-    return long2ip($ip);
+  /**
+   * Gets the CSS selector for an IP row.
+   *
+   * @param \Drupal\country_access_filter\DTO\Ip $ip
+   *   The IP address displayed in the row.
+   *
+   * @return string
+   *   The IP row selector.
+   */
+  private function getIpRowSelector(Ip $ip): string {
+    return "tr[data-id='{$ip->getId()}']";
   }
 
-  private function getIpStatusText(int $status): string {
-    return $status ? '✅' : '⛔';
+  /**
+   * Gets a readable indicator of the IP access decision.
+   *
+   * @param \Drupal\country_access_filter\DTO\Ip $ip
+   *   The IP address to inspect.
+   *
+   * @return string
+   *   A symbol indicating allowed or denied access.
+   */
+  private function getIpAccessText(Ip $ip): string {
+    return $ip->isAllowed() ? '✅' : '⛔';
   }
 
-  private function getIpStatusLink(int $ip, int $status): Link {
+  /**
+   * Builds the link that changes the IP access decision.
+   *
+   * @param \Drupal\country_access_filter\DTO\Ip $ip
+   *   The IP address to update.
+   *
+   * @return \Drupal\Core\Link
+   *   The AJAX access action link.
+   */
+  private function getIpChangeAccessLink(Ip $ip): Link {
+    $is_allowed = $ip->isAllowed();
+
     return Link::createFromRoute(
-      $status ? $this->t('Deny access') : $this->t('Give access'),
-      'country_access_filter.form.country.details.ip.status',
+      $is_allowed ? $this->t('Deny access') : $this->t('Give access'),
+      'country_access_filter.form.country.details.ip.access',
       [
-        'status' => $status ? 0 : 1,
-        'ip' => $ip,
+        'access' => $is_allowed ? 0 : 1,
+        'ip_input' => $ip->getId(),
       ],
       [
         'attributes' => [
@@ -271,11 +338,20 @@ class FormController extends ControllerBase {
     );
   }
 
-  private function getIpRemoveLink(int $ip): Link {
+  /**
+   * Builds the link that removes the IP from storage.
+   *
+   * @param \Drupal\country_access_filter\DTO\Ip $ip
+   *   The IP address to remove.
+   *
+   * @return \Drupal\Core\Link
+   *   The AJAX remove action link.
+   */
+  private function getIpRemoveLink(Ip $ip): Link {
     return Link::createFromRoute(
       $this->t('Remove'),
       'country_access_filter.form.country.details.ip.remove',
-      ['ip' => $ip],
+      ['ip_input' => $ip->getId()],
       [
         'attributes' => [
           'class' => ['use-ajax', 'caf-action'],
@@ -284,11 +360,20 @@ class FormController extends ControllerBase {
     );
   }
 
-  private function getIpInfoLink(int $ip): Link {
+  /**
+   * Builds a link to the IP geolocation details page.
+   *
+   * @param \Drupal\country_access_filter\DTO\Ip $ip
+   *   The IP address to look up.
+   *
+   * @return \Drupal\Core\Link
+   *   The IP information link.
+   */
+  private function getIpInfoLink(Ip $ip): Link {
     return Link::createFromRoute(
       $this->t('IP info'),
       'country_access_filter.form.country.details.ip.info',
-      ['ip' => $ip],
+      ['ip_input' => $ip->getId()],
       [
         'attributes' => [
           'target' => '_blank',

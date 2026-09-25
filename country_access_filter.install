@@ -9,21 +9,26 @@ use Drupal\country_access_filter\AccessMode;
 
 /**
  * Implements hook_schema().
+ *
+ * @return array
+ *   The schema definitions for the module's database tables.
  */
-function country_access_filter_schema() {
+function country_access_filter_schema(): array {
   $schema = [];
 
   $schema['country_access_filter_ips'] = [
-    'description' => 'Table for storing IP addresses and their statuses.',
+    'description' => 'Table for storing IP addresses and their access.',
     'fields' => [
       'ip' => [
-        'description' => 'The IP address stored as an unsigned integer.',
-        'type' => 'int',
-        'unsigned' => TRUE,
+        'description' => 'Packed IPv4 or IPv6 address.',
+        'type' => 'blob',
         'not null' => TRUE,
+        'mysql_type' => 'VARBINARY(16)',
+        'pgsql_type' => 'BYTEA',
+        'sqlite_type' => 'BLOB',
       ],
-      'status' => [
-        'description' => 'IP address status.',
+      'access' => [
+        'description' => 'IP address access. Allowed - 1, denied - 0.',
         'type' => 'int',
         'size' => 'tiny',
         'not null' => TRUE,
@@ -45,10 +50,12 @@ function country_access_filter_schema() {
     'description' => 'Track IP addresses that triggered 404 responses.',
     'fields' => [
       'ip' => [
-        'description' => 'The IP address stored as an unsigned integer.',
-        'type' => 'int',
-        'unsigned' => TRUE,
+        'description' => 'Packed IPv4 or IPv6 address.',
+        'type' => 'blob',
         'not null' => TRUE,
+        'mysql_type' => 'VARBINARY(16)',
+        'pgsql_type' => 'BYTEA',
+        'sqlite_type' => 'BLOB',
       ],
       'first_404' => [
         'description' => 'Timestamp of the first 404 in current window.',
@@ -74,9 +81,9 @@ function country_access_filter_schema() {
 }
 
 /**
- * Add field "country code".
+ * Adds the IP country code field and its index.
  */
-function country_access_filter_update_10001() {
+function country_access_filter_update_10001(): void {
   $table = 'country_access_filter_ips';
   $field = 'country_code';
   $index_name = $field;
@@ -89,7 +96,7 @@ function country_access_filter_update_10001() {
     !empty($spec['fields'][$field])
     && !$schema->fieldExists($table, $field)
   ) {
-    // Clear the table, because prev records become useless w/o the country code.
+    // Clear records because they are unusable without a country code.
     $connection->truncate($table)->execute();
 
     $schema->addField($table, $field, $spec['fields'][$field]);
@@ -104,9 +111,9 @@ function country_access_filter_update_10001() {
 }
 
 /**
- * Create 404 tracker table to monitor and auto-ban IPs.
+ * Creates the table used to track repeated 404 responses.
  */
-function country_access_filter_update_10002() {
+function country_access_filter_update_10002(): void {
   $table = 'country_access_404_tracker';
   $spec = country_access_filter_schema()[$table];
   $schema = Drupal::database()->schema();
@@ -117,9 +124,9 @@ function country_access_filter_update_10002() {
 }
 
 /**
- * Remove key "Debug mode" from module config.
+ * Removes the obsolete debug mode setting from module configuration.
  */
-function country_access_filter_update_10003() {
+function country_access_filter_update_10003(): void {
   Drupal::configFactory()
     ->getEditable('country_access_filter.settings')
     ->clear('debug_mode')
@@ -127,7 +134,7 @@ function country_access_filter_update_10003() {
 }
 
 /**
- * Add default values for 404 tracking config.
+ * Adds default settings for 404 tracking.
  */
 function country_access_filter_update_10004(): void {
   $config = Drupal::configFactory()
@@ -154,7 +161,7 @@ function country_access_filter_update_10004(): void {
 }
 
 /**
- * Add "country_access_mode" to module config.
+ * Adds the country access mode to module configuration.
  */
 function country_access_filter_update_10005(): void {
   Drupal::configFactory()
@@ -164,7 +171,7 @@ function country_access_filter_update_10005(): void {
 }
 
 /**
- * Convert 404 tracking window from hours to seconds.
+ * Converts the 404 tracking window from hours to seconds.
  */
 function country_access_filter_update_10006(): void {
   $config = Drupal::configFactory()
@@ -176,4 +183,229 @@ function country_access_filter_update_10006(): void {
       ->set('track_404_window', (int) $window * 3600)
       ->save();
   }
+}
+
+/**
+ * Converts stored IP addresses to packed binary values in batches.
+ *
+ * @param array $sandbox
+ *   Stores progress between update batches.
+ *
+ * @return void
+ *   No return value. Sets $sandbox['#finished'] to the batch progress.
+ */
+function country_access_filter_update_10007(&$sandbox): void {
+  $database = Drupal::database();
+  $schema = $database->schema();
+
+  $table = 'country_access_filter_ips';
+  $main_field = 'ip';
+  $temporary_field = 'ip_packed';
+  $chunk_size = 1000;
+
+  if (PHP_INT_SIZE < 8) {
+    throw new RuntimeException('The IP migration requires a 64-bit PHP build.');
+  }
+
+  if (!isset($sandbox['initialized'])) {
+    if (!$schema->fieldExists($table, $temporary_field)) {
+      $schema->addField($table, $temporary_field, [
+        'description' => 'Temporary packed IPv4 address.',
+        'type' => 'blob',
+        'not null' => FALSE,
+        'mysql_type' => 'VARBINARY(16)',
+        'pgsql_type' => 'BYTEA',
+        'sqlite_type' => 'BLOB',
+      ]);
+    }
+
+    $sandbox['total'] = (int) $database
+      ->select($table)
+      ->countQuery()
+      ->execute()
+      ->fetchField();
+
+    $sandbox['processed'] = 0;
+    $sandbox['initialized'] = TRUE;
+  }
+
+  $query = $database
+    ->select($table, 'i')
+    ->fields('i', [$main_field])
+    ->isNull($temporary_field)
+    ->orderBy($main_field)
+    ->range(0, $chunk_size);
+
+  $processed_this_pass = 0;
+
+  foreach ($query->execute() as $record) {
+    $database
+      ->update($table)
+      ->fields([
+        $temporary_field => pack('N', (int) $record->ip),
+      ])
+      ->condition($main_field, $record->ip)
+      ->execute();
+
+    $sandbox['processed']++;
+    $processed_this_pass++;
+  }
+
+  if ($processed_this_pass > 0) {
+    $total = max(1, $sandbox['total']);
+
+    // Keep one final pass for replacing the primary key.
+    $sandbox['#finished'] = min(0.99, $sandbox['processed'] / $total);
+
+    return;
+  }
+
+  $database->delete($table)
+    ->isNull($temporary_field)
+    ->execute();
+
+  $schema->dropPrimaryKey($table);
+  $schema->dropField($table, $main_field);
+
+  $schema->changeField(
+    $table,
+    $temporary_field,
+    $main_field,
+    [
+      'description' => 'Packed IPv4 or IPv6 address.',
+      'type' => 'blob',
+      'not null' => TRUE,
+      'mysql_type' => 'VARBINARY(16)',
+      'pgsql_type' => 'BYTEA',
+      'sqlite_type' => 'BLOB',
+    ],
+    [
+      'primary key' => [$main_field],
+    ],
+  );
+
+  $sandbox['#finished'] = 1;
+}
+
+/**
+ * Converts tracked IP addresses to packed binary values in batches.
+ *
+ * @param array $sandbox
+ *   Stores progress between update batches.
+ *
+ * @return void
+ *   No return value. Sets $sandbox['#finished'] to the batch progress.
+ */
+function country_access_filter_update_10008(&$sandbox): void {
+  $database = Drupal::database();
+  $schema = $database->schema();
+
+  $table = 'country_access_404_tracker';
+  $main_field = 'ip';
+  $temporary_field = 'ip_packed';
+  $chunk_size = 1000;
+
+  if (PHP_INT_SIZE < 8) {
+    throw new RuntimeException('The IP migration requires a 64-bit PHP build.');
+  }
+
+  if (!isset($sandbox['initialized'])) {
+    if (!$schema->fieldExists($table, $temporary_field)) {
+      $schema->addField($table, $temporary_field, [
+        'description' => 'Temporary packed IPv4 address.',
+        'type' => 'blob',
+        'not null' => FALSE,
+        'mysql_type' => 'VARBINARY(16)',
+        'pgsql_type' => 'BYTEA',
+        'sqlite_type' => 'BLOB',
+      ]);
+    }
+
+    $sandbox['total'] = (int) $database
+      ->select($table)
+      ->countQuery()
+      ->execute()
+      ->fetchField();
+
+    $sandbox['processed'] = 0;
+    $sandbox['initialized'] = TRUE;
+  }
+
+  $query = $database
+    ->select($table, 'i')
+    ->fields('i', [$main_field])
+    ->isNull($temporary_field)
+    ->orderBy($main_field)
+    ->range(0, $chunk_size);
+
+  $processed_this_pass = 0;
+
+  foreach ($query->execute() as $record) {
+    $database
+      ->update($table)
+      ->fields([
+        $temporary_field => pack('N', (int) $record->ip),
+      ])
+      ->condition($main_field, $record->ip)
+      ->execute();
+
+    $sandbox['processed']++;
+    $processed_this_pass++;
+  }
+
+  if ($processed_this_pass > 0) {
+    $total = max(1, $sandbox['total']);
+
+    // Keep one final pass for replacing the primary key.
+    $sandbox['#finished'] = min(0.99, $sandbox['processed'] / $total);
+
+    return;
+  }
+
+  $database->delete($table)
+    ->isNull($temporary_field)
+    ->execute();
+
+  $schema->dropPrimaryKey($table);
+  $schema->dropField($table, $main_field);
+
+  $schema->changeField(
+    $table,
+    $temporary_field,
+    $main_field,
+    [
+      'description' => 'Packed IPv4 or IPv6 address.',
+      'type' => 'blob',
+      'not null' => TRUE,
+      'mysql_type' => 'VARBINARY(16)',
+      'pgsql_type' => 'BYTEA',
+      'sqlite_type' => 'BLOB',
+    ],
+    [
+      'primary key' => [$main_field],
+    ],
+  );
+
+  $sandbox['#finished'] = 1;
+}
+
+/**
+ * Renames the IP access field from status to access.
+ */
+function country_access_filter_update_10009(): void {
+  $schema = Drupal::database()->schema();
+  $table = 'country_access_filter_ips';
+  $old_name = 'status';
+  $new_name = 'access';
+  $spec = country_access_filter_schema()[$table]['fields'][$new_name] ?? FALSE;
+
+  if (
+    !$spec
+    || !$schema->fieldExists($table, $old_name)
+    || $schema->fieldExists($table, $new_name)
+  ) {
+    return;
+  }
+
+  $schema->changeField($table, $old_name, $new_name, $spec);
 }

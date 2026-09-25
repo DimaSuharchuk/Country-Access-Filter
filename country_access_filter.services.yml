@@ -1,11 +1,18 @@
 services:
+  country_access_filter.config_subscriber:
+    class: Drupal\country_access_filter\EventSubscriber\ConfigSubscriber
+    arguments:
+      - '@country_access_filter.country_service'
+    tags:
+      - { name: event_subscriber }
+
   country_access_filter.event_subscriber:
     class: Drupal\country_access_filter\EventSubscriber\Subscriber
     arguments:
       - '@request_stack'
       - '@config.factory'
       - '@current_user'
-      - '@country_access_filter.country_access_service'
+      - '@country_access_filter.country_service'
     tags:
       - { name: event_subscriber }
 
@@ -16,22 +23,26 @@ services:
       - '@database'
       - '@request_stack'
       - '@logger.factory'
-      - '@country_access_filter.helper'
+      - '@country_access_filter.ip_storage'
+      - '@country_access_filter.tracker_404_storage'
     tags:
       - { name: event_subscriber }
 
-  country_access_filter.country_access_service:
-    class: Drupal\country_access_filter\Service\CountryAccessService
+  country_access_filter.country_service:
+    class: Drupal\country_access_filter\Service\CountryService
     arguments:
-      - '@database'
-      - '@config.factory'
-      - '@logger.factory'
-      - '@country_access_filter.helper'
-
-  country_access_filter.helper:
-    class: Drupal\country_access_filter\Service\Helper
-    arguments:
+      - '@country_access_filter.ip_storage'
       - '@http_client'
       - '@serialization.json'
       - '@config.factory'
       - '@country_manager'
+
+  country_access_filter.ip_storage:
+    class: Drupal\country_access_filter\Service\storage\IpStorage
+    arguments:
+      - '@database'
+
+  country_access_filter.tracker_404_storage:
+    class: Drupal\country_access_filter\Service\storage\Tracker404Storage
+    arguments:
+      - '@database'

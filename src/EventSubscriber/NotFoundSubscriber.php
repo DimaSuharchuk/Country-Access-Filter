@@ -6,7 +6,10 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
-use Drupal\country_access_filter\Service\Helper;
+use Drupal\country_access_filter\DTO\IpInput;
+use Drupal\country_access_filter\DTO\Tracked404;
+use Drupal\country_access_filter\Service\storage\IpStorage;
+use Drupal\country_access_filter\Service\storage\Tracker404Storage;
 use Exception;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -14,34 +17,68 @@ use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\KernelEvents;
 
+/**
+ * Tracks repeated 404 responses and bans IP addresses over the limit.
+ */
 class NotFoundSubscriber implements EventSubscriberInterface {
 
+  /**
+   * The logger for country access and 404 tracking events.
+   *
+   * @var \Drupal\Core\Logger\LoggerChannelInterface
+   */
   protected LoggerChannelInterface $logger;
 
+  /**
+   * Constructs the 404 tracking event subscriber.
+   *
+   * @param \Drupal\Core\Config\ConfigFactoryInterface $configFactory
+   *   The configuration factory.
+   * @param \Drupal\Core\Database\Connection $db
+   *   The database connection.
+   * @param \Symfony\Component\HttpFoundation\RequestStack $requestStack
+   *   The active request stack.
+   * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger
+   *   The logger channel factory.
+   * @param \Drupal\country_access_filter\Service\storage\IpStorage $ipStorage
+   *   The storage service for IP access decisions.
+   * @param \Drupal\country_access_filter\Service\storage\Tracker404Storage $trackerStorage
+   *   The storage service for 404 tracking records.
+   */
   public function __construct(
     readonly protected ConfigFactoryInterface $configFactory,
     readonly protected Connection $db,
     readonly protected RequestStack $requestStack,
     LoggerChannelFactoryInterface $logger,
-    readonly protected Helper $helper,
+    protected IpStorage $ipStorage,
+    protected Tracker404Storage $trackerStorage,
   ) {
     $this->logger = $logger->get('country_access_filter');
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public static function getSubscribedEvents(): array {
     return [
       KernelEvents::EXCEPTION => ['onException', 0],
     ];
   }
 
+  /**
+   * Tracks a main-request 404 for a previously recorded IP address.
+   *
+   * @param \Symfony\Component\HttpKernel\Event\ExceptionEvent $event
+   *   The exception event to inspect.
+   */
   public function onException(ExceptionEvent $event): void {
-    if (!$event->getThrowable() instanceof NotFoundHttpException) {
+    if (!$event->isMainRequest() || !$event->getThrowable() instanceof NotFoundHttpException) {
       return;
     }
 
     $config = $this->configFactory->get('country_access_filter.settings');
 
-    if (!$config->get('track_404')) {
+    if (!$config->get('enabled') || !$config->get('track_404')) {
       return;
     }
 
@@ -49,69 +86,44 @@ class NotFoundSubscriber implements EventSubscriberInterface {
     $window_seconds = $config->get('track_404_window') ?: NULL;
 
     try {
-      $ip = $this->requestStack->getCurrentRequest()->getClientIp();
-      $ip_int = ip2long($ip);
-      $now = time();
+      $ip_input = $this->requestStack->getCurrentRequest()->getClientIp();
+      $ip = $this->ipStorage->load(new IpInput($ip_input));
 
-      $record = $this->db->select('country_access_404_tracker', 't')
-        ->fields('t')
-        ->condition('ip', $ip_int)
-        ->execute()
-        ->fetchObject();
-
-      if ($record) {
-        $is_expired = $window_seconds && ($now - $record->first_404 > $window_seconds);
-
-        if ($is_expired) {
-          $this->db->update('country_access_404_tracker')
-            ->fields([
-              'count' => 1,
-              'first_404' => $now,
-            ])
-            ->condition('ip', $ip_int)
-            ->execute();
-        }
-        else {
-          $new_count = $record->count + 1;
-
-          if ($new_count >= $threshold) {
-            // Add to the blocklist.
-            $this->db->merge('country_access_filter_ips')
-              ->keys([
-                'ip' => $ip_int,
-              ])
-              ->fields([
-                'status' => 0,
-                'country_code' => 'XX',
-              ])
-              ->execute();
-
-            // Clean up.
-            $this->db->delete('country_access_404_tracker')
-              ->condition('ip', $ip_int)
-              ->execute();
-
-            $this->logger->info('IP @ip is banned for exceeding 404s. Country @country.', [
-              '@ip' => $ip,
-              '@country' => $this->helper->getCountryCodeByIP($ip),
-            ]);
-          }
-          else {
-            $this->db->update('country_access_404_tracker')
-              ->fields(['count' => $new_count])
-              ->condition('ip', $ip_int)
-              ->execute();
-          }
-        }
+      if (!$ip) {
+        return;
       }
-      else {
-        $this->db->insert('country_access_404_tracker')
-          ->fields([
-            'ip' => $ip_int,
-            'first_404' => $now,
-            'count' => 1,
-          ])
-          ->execute();
+
+      $tracker = $this->trackerStorage->load($ip);
+
+      $now = time();
+      $is_expired = $tracker && $window_seconds && ($now - $tracker->getFirstTimestamp() > $window_seconds);
+      $first_timestamp = $tracker && !$is_expired ? $tracker->getFirstTimestamp() : $now;
+      $new_count = $tracker && !$is_expired ? $tracker->getCount() + 1 : 1;
+      $updated_tracker = new Tracked404($ip, $first_timestamp, $new_count);
+
+      if ($new_count >= $threshold) {
+        if (!$this->ipStorage->deny($ip)) {
+          $this->logger->error('Failed to ban IP @ip after exceeding 404s.', [
+            '@ip' => $ip->toReadable(),
+          ]);
+          return;
+        }
+
+        if ($tracker && !$this->trackerStorage->delete($tracker)) {
+          $this->logger->error('Failed to remove the 404 tracker for banned IP @ip.', [
+            '@ip' => $ip->toReadable(),
+          ]);
+        }
+
+        $this->logger->info('IP @ip is banned for exceeding 404s. Country @country.', [
+          '@ip' => $ip->toReadable(),
+          '@country' => $ip->getCountryCode(),
+        ]);
+      }
+      elseif (!$this->trackerStorage->save($updated_tracker)) {
+        $this->logger->error('Failed to save the 404 tracker for IP @ip.', [
+          '@ip' => $ip->toReadable(),
+        ]);
       }
     }
     catch (Exception $e) {

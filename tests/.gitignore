@@ -1,0 +1,15 @@
+# Local audit notes and release planning.
+*.md
+
+# Local test configuration, credentials, and generated artifacts.
+.env
+.env.*
+phpunit.xml.local
+*.phar
+*.sqlite
+*.sqlite3
+.phpunit.cache/
+.phpunit.result.cache
+coverage/
+reports/
+screenshots/

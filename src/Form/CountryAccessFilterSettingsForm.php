@@ -8,40 +8,93 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Link;
 use Drupal\Core\Locale\CountryManagerInterface;
 use Drupal\country_access_filter\AccessMode;
-use Drupal\country_access_filter\Service\Helper;
+use Drupal\country_access_filter\Service\CountryService;
+use Drupal\country_access_filter\Service\storage\IpStorage;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
+/**
+ * Builds and validates the country access filter settings form.
+ */
 class CountryAccessFilterSettingsForm extends ConfigFormBase {
 
+  /**
+   * The Drupal database connection.
+   *
+   * @var \Drupal\Core\Database\Connection|null
+   */
   protected ?Connection $db;
 
+  /**
+   * The service that provides the list of countries.
+   *
+   * @var \Drupal\Core\Locale\CountryManagerInterface
+   */
   protected CountryManagerInterface $countries;
 
-  protected Helper $helper;
+  /**
+   * The service that evaluates country access rules.
+   *
+   * @var \Drupal\country_access_filter\Service\CountryService
+   */
+  protected CountryService $countryService;
 
   /**
-   * {@inheritDoc}
+   * The storage service for IP access decisions.
+   *
+   * @var \Drupal\country_access_filter\Service\storage\IpStorage
+   */
+  protected IpStorage $ipStorage;
+
+  /**
+   * Creates the settings form with its required module services.
+   *
+   * @param \Symfony\Component\DependencyInjection\ContainerInterface $container
+   *   The service container.
+   *
+   * @return static
+   *   The initialized settings form.
    */
   public static function create(ContainerInterface $container): static {
     $instance = parent::create($container);
 
     $instance->db = $container->get('database');
     $instance->countries = $container->get('country_manager');
-    $instance->helper = $container->get('country_access_filter.helper');
+    $instance->countryService = $container->get('country_access_filter.country_service');
+    $instance->ipStorage = $container->get('country_access_filter.ip_storage');
 
     return $instance;
   }
 
+  /**
+   * {@inheritdoc}
+   *
+   * @return string[]
+   *   The configuration object edited by this form.
+   */
   protected function getEditableConfigNames(): array {
     return ['country_access_filter.settings'];
   }
 
+  /**
+   * {@inheritdoc}
+   *
+   * @return string
+   *   The unique form ID.
+   */
   public function getFormId(): string {
     return 'country_access_filter_settings_form';
   }
 
   /**
    * {@inheritdoc}
+   *
+   * @param array $form
+   *   The form structure to build.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The current form state.
+   *
+   * @return array
+   *   The completed settings form.
    */
   public function buildForm(array $form, FormStateInterface $form_state): array {
     $config = $this->config('country_access_filter.settings');
@@ -125,15 +178,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
     ];
 
     // IPs info.
-    $query = $this->db
-      ->select('country_access_filter_ips', 'i')
-      ->fields('i', ['status'])
-      ->groupBy('status');
-    $query->addExpression('COUNT(status)');
-    $counts = $query->execute()->fetchAllKeyed();
-
-    $count_allowed = $counts[1] ?? 0;
-    $count_denied = $counts[0] ?? 0;
+    [$count_denied, $count_allowed] = $this->ipStorage->getIpAccessCounts();
     $count_all = $count_allowed + $count_denied;
 
     $form['info'] = [
@@ -158,14 +203,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
     ];
 
     // Countries.
-    $query = $this->db
-      ->select('country_access_filter_ips', 'i')
-      ->fields('i', ['country_code'])
-      ->groupBy('country_code');
-    $query->addExpression('COUNT(country_code)', 'count');
-    $query->addExpression('SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END)', 'allowed');
-    $query->addExpression('SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END)', 'denied');
-    $countries = $query->execute()->fetchAll();
+    $countries = $this->ipStorage->getCountryStats();
 
     $header = [
       'country' => $this->t('Country'),
@@ -199,7 +237,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
         'data-country' => $country,
       ];
 
-      $country_allowed = $this->helper->isCountryAllowed($country);
+      $country_allowed = $this->countryService->isCountryAllowed($country);
 
       if ($country_allowed) {
         $rows[$country]['class'][] = 'allowed';
@@ -256,6 +294,11 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
 
   /**
    * {@inheritdoc}
+   *
+   * @param array $form
+   *   The form structure being validated.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The submitted form state.
    */
   public function validateForm(array &$form, FormStateInterface $form_state): void {
     foreach ($form_state->getValue('countries') as $country_code) {
@@ -274,6 +317,11 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
 
   /**
    * {@inheritdoc}
+   *
+   * @param array $form
+   *   The submitted form structure.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The submitted form state.
    */
   public function submitForm(array &$form, FormStateInterface $form_state): void {
     $config = $this->config('country_access_filter.settings');
@@ -282,7 +330,6 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
     $is_access_allowed = $access_mode == AccessMode::ALLOW->value;
 
     $selected_countries = $form_state->getValue('countries');
-    $all_counties = array_keys($this->countries->getList());
 
     $config
       ->set('enabled', $form_state->getValue('enabled'))
@@ -292,23 +339,6 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       ->set('track_404_threshold', $form_state->getValue('track_404_threshold'))
       ->set('track_404_window', $form_state->getValue('track_404_window'))
       ->save();
-
-    $unlock_countries = $is_access_allowed ? $selected_countries : array_diff($all_counties, $selected_countries);
-    $block_countries = array_diff($all_counties, $unlock_countries);
-
-    if ($unlock_countries) {
-      $this->db->update('country_access_filter_ips')
-        ->fields(['status' => 1])
-        ->condition('country_code', $unlock_countries, 'IN')
-        ->execute();
-    }
-
-    if ($block_countries) {
-      $this->db->update('country_access_filter_ips')
-        ->fields(['status' => 0])
-        ->condition('country_code', $block_countries, 'IN')
-        ->execute();
-    }
 
     if (!$selected_countries && $is_access_allowed) {
       $this->messenger()

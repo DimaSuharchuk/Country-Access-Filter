@@ -13,16 +13,16 @@ country_access_filter.form.country.details:
     _title: 'Country IPs'
   requirements:
     _permission: 'administer site configuration'
-country_access_filter.form.country.details.ip.status:
-  path: '/ajax/caf/ip/{ip}/set-status/{status}'
+country_access_filter.form.country.details.ip.access:
+  path: '/ajax/caf/ip/{ip_input}/change-access/{access}'
   defaults:
-    _controller: '\Drupal\country_access_filter\Controller\FormController::ipSetStatusAjaxCallback'
-    _title: 'Set status for IP (0 - denied, 1 - allowed)'
+    _controller: '\Drupal\country_access_filter\Controller\FormController::ipChangeAccessAjaxCallback'
+    _title: 'Set access for IP (0 - denied, 1 - allowed)'
   requirements:
     _permission: 'administer site configuration'
     _csrf_token: 'TRUE'
 country_access_filter.form.country.details.ip.remove:
-  path: '/ajax/caf/ip/{ip}/remove'
+  path: '/ajax/caf/ip/{ip_input}/remove'
   defaults:
     _controller: '\Drupal\country_access_filter\Controller\FormController::ipRemoveAjaxCallback'
     _title: 'Remove IP from DB'
@@ -30,7 +30,7 @@ country_access_filter.form.country.details.ip.remove:
     _permission: 'administer site configuration'
     _csrf_token: 'TRUE'
 country_access_filter.form.country.details.ip.info:
-  path: '/admin/country-access-filter/ip/{ip}/info'
+  path: '/admin/country-access-filter/ip/{ip_input}/info'
   defaults:
     _controller: '\Drupal\country_access_filter\Controller\FormController::ipInfoCallback'
     _title: 'IP info'
