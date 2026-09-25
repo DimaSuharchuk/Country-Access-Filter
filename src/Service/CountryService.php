@@ -22,7 +22,7 @@ use RuntimeException;
 class CountryService {
 
   /**
-   * Country code used when the IP lookup provider omits a country code.
+   * Country code for a successful lookup with an unknown country.
    *
    * @var string
    */

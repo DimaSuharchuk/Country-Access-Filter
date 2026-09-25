@@ -22,6 +22,7 @@ if (!$root) {
 
 $loader = require $root . '/autoload.php';
 $loader->addPsr4('Drupal\\country_access_filter\\', dirname(__DIR__) . '/src');
+$loader->addPsr4('Drupal\\user\\', $root . '/core/modules/user/src');
 $loader->addPsr4('Drupal\\sqlite\\', $root . '/core/modules/sqlite/src');
 $loader->addPsr4('Drupal\\page_cache\\', $root . '/core/modules/page_cache/src');
 require_once $root . '/core/includes/bootstrap.inc';
