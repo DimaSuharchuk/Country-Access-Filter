@@ -36,6 +36,7 @@ services:
       - '@serialization.json'
       - '@config.factory'
       - '@country_manager'
+      - '@logger.channel.country_access_filter'
 
   country_access_filter.ip_storage:
     class: Drupal\country_access_filter\Service\storage\IpStorage
@@ -46,3 +47,7 @@ services:
     class: Drupal\country_access_filter\Service\storage\Tracker404Storage
     arguments:
       - '@database'
+
+  logger.channel.country_access_filter:
+    parent: logger.channel_base
+    arguments: ['country_access_filter']

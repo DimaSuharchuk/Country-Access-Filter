@@ -17,8 +17,7 @@ use Drupal\country_access_filter\DTO\IpInput;
 use Drupal\country_access_filter\IpAccess;
 use Drupal\country_access_filter\Service\CountryService;
 use Drupal\country_access_filter\Service\storage\IpStorage;
-use GuzzleHttp\ClientInterface;
-use GuzzleHttp\Exception\GuzzleException;
+use RuntimeException;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -34,11 +33,6 @@ class FormController extends ControllerBase {
    * The country access service.
    */
   protected CountryService $countryService;
-
-  /**
-   * The HTTP client for IP information requests.
-   */
-  protected ClientInterface $httpClient;
 
   /**
    * The IP storage service.
@@ -63,7 +57,6 @@ class FormController extends ControllerBase {
     $instance = parent::create($container);
 
     $instance->countryService = $container->get('country_access_filter.country_service');
-    $instance->httpClient = $container->get('http_client');
     $instance->ipStorage = $container->get('country_access_filter.ip_storage');
     $instance->countryManager = $container->get('country_manager');
 
@@ -245,19 +238,15 @@ class FormController extends ControllerBase {
     $readable_ip = $ip->toReadable();
 
     try {
-      $response = $this->httpClient->request('GET', "http://ip-api.com/json/$readable_ip", [
-        'connect_timeout' => 2,
-        'timeout' => 5,
-      ]);
-      $data = json_decode($response->getBody()->getContents(), TRUE) ?: [];
+      $data = $this->countryService->getIpInfo(new IpInput($readable_ip), TRUE);
+      $status = Response::HTTP_OK;
     }
-    catch (GuzzleException $exception) {
-      $data = [
-        'error' => $exception->getMessage(),
-      ];
+    catch (RuntimeException $exception) {
+      $data = ['error' => $exception->getMessage()];
+      $status = Response::HTTP_SERVICE_UNAVAILABLE;
     }
 
-    return new Response($readable_ip . PHP_EOL . PHP_EOL . print_r($data, TRUE), Response::HTTP_OK, [
+    return new Response($readable_ip . PHP_EOL . PHP_EOL . print_r($data, TRUE), $status, [
       'Content-Type' => 'text/plain; charset=UTF-8',
     ]);
   }

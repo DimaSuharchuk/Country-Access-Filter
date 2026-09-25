@@ -25,11 +25,11 @@ final class IpSearchTest extends AuditTestBase {
     $this->configurePolicy();
     $storage = $this->container->get('country_access_filter.ip_storage');
     $storage->deny($this->ip());
-    $handler = new MockHandler([new Response(200, [], '{"countryCode":"US"}')]);
+    $handler = new MockHandler([new Response(200, [], '{"status":"success","countryCode":"US"}')]);
     $client = new Client(['handler' => HandlerStack::create($handler)]);
     $this->container->set('http_client', $client);
     $this->container->set('country_access_filter.country_service', new CountryService(
-      $storage, $client, new Json(), $this->container->get('config.factory'), $this->container->get('country_manager'),
+      $storage, $client, new Json(), $this->container->get('config.factory'), $this->container->get('country_manager'), new \Psr\Log\NullLogger(),
     ));
     $instance = CountryAccessFilterSettingsForm::create($this->container);
     $form = [];
@@ -68,7 +68,7 @@ final class IpSearchTest extends AuditTestBase {
     $handler = new MockHandler([new Response(503)]);
     $client = new Client(['handler' => HandlerStack::create($handler)]);
     $this->container->set('country_access_filter.country_service', new CountryService(
-      $storage, $client, new Json(), $this->container->get('config.factory'), $this->container->get('country_manager'),
+      $storage, $client, new Json(), $this->container->get('config.factory'), $this->container->get('country_manager'), new \Psr\Log\NullLogger(),
     ));
     $instance = CountryAccessFilterSettingsForm::create($this->container);
     $form = [];

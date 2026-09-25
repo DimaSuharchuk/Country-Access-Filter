@@ -93,18 +93,33 @@ final class ControllerTest extends AuditTestBase {
   }
 
   /**
-   * Tests the administrative IP information request also has time limits.
+   * Tests administrative IP information uses the shared provider handling.
    */
-  public function testIpInfoTimeouts(): void {
+  public function testIpInfoUsesCountryService(): void {
     $controller = $this->controller();
-    $client = $this->createMock(ClientInterface::class);
-    $client->expects(self::once())->method('request')
-      ->with('GET', 'http://ip-api.com/json/192.0.2.1', ['connect_timeout' => 2, 'timeout' => 5])
-      ->willReturn(new \GuzzleHttp\Psr7\Response(200, [], '{}'));
-    $property = new \ReflectionProperty($controller, 'httpClient');
-    $property->setValue($controller, $client);
+    $service = $this->getMockBuilder(CountryService::class)->disableOriginalConstructor()->getMock();
+    $service->expects(self::once())->method('getIpInfo')
+      ->with(self::callback(fn($ip) => $ip->toReadable() === '192.0.2.1'), TRUE)
+      ->willReturn(['status' => 'success', 'countryCode' => 'UA']);
+    $property = new \ReflectionProperty($controller, 'countryService');
+    $property->setValue($controller, $service);
 
     self::assertSame(200, $controller->ipInfoCallback('192.0.2.1')->getStatusCode());
+  }
+
+  /**
+   * Tests provider failures are displayed as a 503 on the information page.
+   */
+  public function testIpInfoProviderFailure(): void {
+    $controller = $this->controller();
+    $service = $this->getMockBuilder(CountryService::class)->disableOriginalConstructor()->getMock();
+    $service->method('getIpInfo')->willThrowException(new \RuntimeException('Geolocation service did not respond.'));
+    $property = new \ReflectionProperty($controller, 'countryService');
+    $property->setValue($controller, $service);
+    $response = $controller->ipInfoCallback('192.0.2.1');
+
+    self::assertSame(503, $response->getStatusCode());
+    self::assertStringContainsString('Geolocation service did not respond.', $response->getContent());
   }
 
 }

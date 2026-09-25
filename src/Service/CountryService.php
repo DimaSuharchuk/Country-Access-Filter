@@ -13,6 +13,8 @@ use Drupal\country_access_filter\IpAccess;
 use Drupal\country_access_filter\Service\storage\IpStorage;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
+use Psr\Log\LoggerInterface;
+use RuntimeException;
 
 /**
  * Determines IP access from the configured country policy.
@@ -39,6 +41,8 @@ class CountryService {
    *   The configuration factory.
    * @param \Drupal\Core\Locale\CountryManagerInterface $countryManager
    *   The service that provides the list of countries.
+   * @param \Psr\Log\LoggerInterface $logger
+   *   The module watchdog logger.
    */
   public function __construct(
     protected IpStorage $ipStorage,
@@ -46,6 +50,7 @@ class CountryService {
     protected SerializationInterface $serialization,
     protected ConfigFactoryInterface $configFactory,
     protected CountryManagerInterface $countryManager,
+    protected LoggerInterface $logger,
   ) {}
 
   /**
@@ -95,28 +100,79 @@ class CountryService {
     }
 
     try {
-      $response = $this->httpClient->request('GET', "http://ip-api.com/json/{$ip->toReadable()}?fields=countryCode", [
+      return $this->getIpInfo($ip)['countryCode'];
+    }
+    catch (RuntimeException) {
+      return NULL;
+    }
+  }
+
+  /**
+   * Fetches validated geolocation data and logs provider failures.
+   *
+   * @param \Drupal\country_access_filter\DTO\IpInput $ip
+   *   The IP address to look up.
+   * @param bool $full
+   *   Whether to request all fields for the administrative information page.
+   *
+   * @return array
+   *   A successful provider response with a valid country code.
+   *
+   * @throws \RuntimeException
+   *   When the provider is unavailable or returns an error or invalid data.
+   */
+  public function getIpInfo(IpInput $ip, bool $full = FALSE): array {
+    if (!$ip->isValid()) {
+      throw new RuntimeException('Invalid IP address.');
+    }
+
+    $url = "http://ip-api.com/json/{$ip->toReadable()}";
+
+    if (!$full) {
+      $url .= '?fields=status,message,countryCode';
+    }
+
+    try {
+      $response = $this->httpClient->request('GET', $url, [
         'connect_timeout' => 2,
         'timeout' => 5,
+        'http_errors' => FALSE,
       ]);
       $data = $this->serialization->decode($response->getBody()->getContents());
+      $status = $response->getStatusCode();
+      $message = is_array($data) && is_string($data['message'] ?? NULL)
+        ? mb_substr($data['message'], 0, 1000)
+        : 'No error details provided.';
 
-      if (!is_array($data)) {
-        return NULL;
+      if ($status < 200 || $status >= 300) {
+        throw new RuntimeException("Geolocation service returned HTTP $status: $message");
       }
 
-      $country_code = $data['countryCode'] ?? static::COUNTRY_CODE_UNDEFINED;
-
-      if (!is_string($country_code) || !preg_match('/^[A-Z]{2}$/D', $country_code)) {
-        return NULL;
+      if (!is_array($data) || !in_array($data['status'] ?? NULL, ['success', 'fail'], TRUE)) {
+        throw new RuntimeException('Geolocation service returned an invalid response.');
       }
 
-      return $country_code;
-    }
-    catch (GuzzleException) {
-    }
+      if ($data['status'] === 'fail') {
+        throw new RuntimeException("Geolocation service reported an error: $message");
+      }
 
-    return NULL;
+      if (!is_string($data['countryCode'] ?? NULL) || !preg_match('/^[A-Z]{2}$/D', $data['countryCode'])) {
+        throw new RuntimeException('Geolocation service returned an invalid or missing country code.');
+      }
+
+      return $data;
+    }
+    catch (GuzzleException | RuntimeException $exception) {
+      $message = $exception instanceof GuzzleException
+        ? 'Geolocation service did not respond. The connection failed or the request timed out.'
+        : $exception->getMessage();
+      $this->logger->error('IP geolocation failed for @ip: @reason', [
+        '@ip' => $ip->toReadable(),
+        '@reason' => $message,
+      ]);
+
+      throw new RuntimeException($message, 0, $exception);
+    }
   }
 
   /**

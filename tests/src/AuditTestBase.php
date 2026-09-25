@@ -56,7 +56,7 @@ abstract class AuditTestBase extends TestCase {
     $service = new \Drupal\country_access_filter\Service\CountryService(
       $ipStorage,
       new \GuzzleHttp\Client(['handler' => \GuzzleHttp\HandlerStack::create(new \GuzzleHttp\Handler\MockHandler([]))]),
-      new \Drupal\Component\Serialization\Json(), $factory, $countries,
+      new \Drupal\Component\Serialization\Json(), $factory, $countries, new \Psr\Log\NullLogger(),
     );
     $dispatcher->addSubscriber(new \Drupal\country_access_filter\EventSubscriber\ConfigSubscriber($service));
     $this->container->set('config.factory', $factory);
