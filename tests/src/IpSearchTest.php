@@ -56,7 +56,7 @@ final class IpSearchTest extends AuditTestBase {
     self::assertSame('2001:db8::42', $table['#rows'][0]['data-id']);
     self::assertEquals($controller->countryDetailsAjaxCallback('US'), $table);
     self::assertSame('Ukraine (UA) IPs', (string) $controller->countryDetailsTitle('UA'));
-    self::assertSame('Unknown country (XX) IPs', (string) $controller->countryDetailsTitle('XX'));
+    self::assertSame('Unknown country (XX) IPs', (string) $controller->countryDetailsTitle(CountryService::COUNTRY_CODE_UNDEFINED));
   }
 
   /**

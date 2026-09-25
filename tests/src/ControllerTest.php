@@ -89,7 +89,7 @@ final class ControllerTest extends AuditTestBase {
     $unused->expects(self::never())->method('getList');
     $this->container->set('country_manager', $unused);
     self::assertSame('Ukraine (UA) IPs', (string) $controller->countryDetailsTitle('UA'));
-    self::assertSame('Unknown country (XX) IPs', (string) $controller->countryDetailsTitle('XX'));
+    self::assertSame('Unknown country (XX) IPs', (string) $controller->countryDetailsTitle(CountryService::COUNTRY_CODE_UNDEFINED));
   }
 
   /**

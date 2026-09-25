@@ -2,6 +2,7 @@
 
 namespace Drupal\Tests\country_access_filter;
 
+use Drupal\country_access_filter\Service\CountryService;
 use Drupal\country_access_filter\DTO\IpInput;
 use Drupal\country_access_filter\DTO\Tracked404;
 use Drupal\country_access_filter\IpAccess;
@@ -20,8 +21,8 @@ final class UnknownCountryUpdateTest extends AuditTestBase {
     $storage = new IpStorage($this->db);
     $trackers = new Tracker404Storage($this->db);
     $fixtures = [
-      $this->ip('192.0.2.1', IpAccess::Allowed, 'XX'),
-      $this->ip('2001:db8::1', IpAccess::Denied, 'XX'),
+      $this->ip('192.0.2.1', IpAccess::Allowed, CountryService::COUNTRY_CODE_UNDEFINED),
+      $this->ip('2001:db8::1', IpAccess::Denied, CountryService::COUNTRY_CODE_UNDEFINED),
       $this->ip('192.0.2.2', IpAccess::Allowed, 'UA'),
       $this->ip('2001:db8::2', IpAccess::Denied, 'US'),
     ];
@@ -42,7 +43,7 @@ final class UnknownCountryUpdateTest extends AuditTestBase {
     foreach ($fixtures as $ip) {
       $loaded = $storage->load(new IpInput($ip->getId()));
 
-      if ($ip->getCountryCode() === 'XX') {
+      if ($ip->getCountryCode() === CountryService::COUNTRY_CODE_UNDEFINED) {
         self::assertNull($loaded);
         self::assertNull($trackers->load($ip));
       }
@@ -56,7 +57,7 @@ final class UnknownCountryUpdateTest extends AuditTestBase {
     self::assertSame(2, $trackers->load($orphan)->getCount());
     // A legitimate unknown country can be stored again after the update.
     self::assertTrue($storage->save($fixtures[0]));
-    self::assertSame('XX', (new IpStorage($this->db))->load(new IpInput('192.0.2.1'))->getCountryCode());
+    self::assertSame(CountryService::COUNTRY_CODE_UNDEFINED, (new IpStorage($this->db))->load(new IpInput('192.0.2.1'))->getCountryCode());
     self::assertFalse((new IpStorage($this->db))->load(new IpInput('192.0.2.1'))->isAccessLocked());
   }
 

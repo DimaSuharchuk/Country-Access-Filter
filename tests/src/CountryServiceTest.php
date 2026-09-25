@@ -248,7 +248,7 @@ final class CountryServiceTest extends AuditTestBase {
     $service = $this->service(new MockHandler([new Response(200, [], '{"status":"success","countryCode":"XX"}')]), [], $logger);
 
     self::assertFalse($service->hasAccess(new IpInput('192.0.2.1')));
-    self::assertSame('XX', (new IpStorage($this->db))->load(new IpInput('192.0.2.1'))->getCountryCode());
+    self::assertSame(CountryService::COUNTRY_CODE_UNDEFINED, (new IpStorage($this->db))->load(new IpInput('192.0.2.1'))->getCountryCode());
   }
 
   /**

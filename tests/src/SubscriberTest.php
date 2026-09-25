@@ -118,7 +118,7 @@ final class SubscriberTest extends AuditTestBase {
    * Provides countries that must survive an automatic ban unchanged.
    */
   public static function banCountries(): array {
-    return [['UA'], ['US'], ['XX']];
+    return [['UA'], ['US'], [CountryService::COUNTRY_CODE_UNDEFINED]];
   }
 
   /**

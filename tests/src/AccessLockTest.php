@@ -2,6 +2,7 @@
 
 namespace Drupal\Tests\country_access_filter;
 
+use Drupal\country_access_filter\Service\CountryService;
 use Drupal\country_access_filter\DTO\IpInput;
 use Drupal\country_access_filter\IpAccess;
 use Drupal\country_access_filter\Service\storage\IpStorage;
@@ -56,7 +57,7 @@ final class AccessLockTest extends AuditTestBase {
     $this->db->schema()->dropField(IpStorage::TABLE, 'access_locked');
     $expected = [];
 
-    foreach (['UA', 'US', 'XX'] as $index => $country) {
+    foreach (['UA', 'US', CountryService::COUNTRY_CODE_UNDEFINED] as $index => $country) {
       foreach ([0, 1] as $access) {
         $address = "2001:db8::$index$access";
         $this->db->insert(IpStorage::TABLE)->fields([

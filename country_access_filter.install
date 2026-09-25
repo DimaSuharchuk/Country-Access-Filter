@@ -5,6 +5,7 @@
  * Install, update, and uninstall functions for the module.
  */
 
+use Drupal\country_access_filter\Service\CountryService;
 use Drupal\country_access_filter\AccessMode;
 
 /**
@@ -469,12 +470,12 @@ function country_access_filter_update_10011(): void {
     // so the next request resolves the country again, including legitimate XX.
     $unknown_ips = $database->select('country_access_filter_ips', 'i')
       ->fields('i', ['ip'])
-      ->condition('country_code', 'XX');
+      ->condition('country_code', CountryService::COUNTRY_CODE_UNDEFINED);
     $database->delete('country_access_404_tracker')
       ->condition('ip', $unknown_ips, 'IN')
       ->execute();
     $database->delete('country_access_filter_ips')
-      ->condition('country_code', 'XX')
+      ->condition('country_code', CountryService::COUNTRY_CODE_UNDEFINED)
       ->execute();
   }
   catch (\Throwable $exception) {
