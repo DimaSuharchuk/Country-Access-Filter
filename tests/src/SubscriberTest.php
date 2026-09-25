@@ -93,6 +93,30 @@ final class SubscriberTest extends AuditTestBase {
   }
 
   /**
+   * Tests autobans preserve both resolved and legitimately unknown countries.
+   *
+   * @param string $country
+   *   The country originally returned by the provider.
+   *
+   * @dataProvider banCountries
+   */
+  public function testAutobanPreservesCountry(string $country): void {
+    (new IpStorage($this->db))->save($this->ip('192.0.2.1', \Drupal\country_access_filter\IpAccess::Allowed, $country));
+    $this->track(['track_404_threshold' => 1]);
+    $ip = (new IpStorage($this->db))->load(new IpInput('192.0.2.1'));
+    self::assertFalse($ip->isAllowed());
+    self::assertTrue($ip->isAccessLocked());
+    self::assertSame($country, $ip->getCountryCode());
+  }
+
+  /**
+   * Provides countries that must survive an automatic ban unchanged.
+   */
+  public static function banCountries(): array {
+    return [['UA'], ['US'], ['XX']];
+  }
+
+  /**
    * Tests threshold one bans when previous window expired.
    */
   public function testThresholdOneBansWhenPreviousWindowExpired(): void {

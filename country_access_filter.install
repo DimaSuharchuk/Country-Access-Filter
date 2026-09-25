@@ -456,3 +456,28 @@ function country_access_filter_update_10010(): void {
 
   $query->execute();
 }
+
+/**
+ * Removes legacy unknown-country IPs and their stale 404 counters.
+ */
+function country_access_filter_update_10011(): void {
+  $database = Drupal::database();
+  $transaction = $database->startTransaction();
+  try {
+    // Historical autobans overwrote the country with XX. Forget these decisions
+    // so the next request resolves the country again, including legitimate XX.
+    $unknown_ips = $database->select('country_access_filter_ips', 'i')
+      ->fields('i', ['ip'])
+      ->condition('country_code', 'XX');
+    $database->delete('country_access_404_tracker')
+      ->condition('ip', $unknown_ips, 'IN')
+      ->execute();
+    $database->delete('country_access_filter_ips')
+      ->condition('country_code', 'XX')
+      ->execute();
+  }
+  catch (\Throwable $exception) {
+    $transaction->rollBack();
+    throw $exception;
+  }
+}
