@@ -2,12 +2,17 @@
 
 namespace Drupal\country_access_filter\Form;
 
+use Drupal\Core\Ajax\AjaxResponse;
+use Drupal\Core\Ajax\MessageCommand;
+use Drupal\Core\Ajax\OpenModalDialogCommand;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Link;
 use Drupal\Core\Locale\CountryManagerInterface;
 use Drupal\country_access_filter\AccessMode;
+use Drupal\country_access_filter\Controller\FormController;
+use Drupal\country_access_filter\DTO\IpInput;
 use Drupal\country_access_filter\Service\CountryService;
 use Drupal\country_access_filter\Service\storage\IpStorage;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -104,6 +109,34 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       '#title' => $this->t('Enable functionality'),
       '#default_value' => $config->get('enabled'),
     ];
+
+    $form['ip_search'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Find an IP address'),
+      '#description' => $this->t('Find a stored IPv4 or IPv6 address, or look up and add a new one using the saved country rules.'),
+      '#attached' => ['library' => ['country_access_filter/ip_search']],
+    ];
+    $form['ip_search']['row'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['caf-ip-search']],
+    ];
+    $form['ip_search']['row']['ip_search_address'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('IP address'),
+      '#title_display' => 'invisible',
+      '#attributes' => ['placeholder' => $this->t('IPv4 or IPv6 address')],
+      '#size' => 45,
+      '#maxlength' => 45,
+    ];
+    $form['ip_search']['row']['search'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Find IP'),
+      '#name' => 'ip_search',
+      '#submit' => ['::submitIpSearch'],
+      '#limit_validation_errors' => [['ip_search_address']],
+      '#ajax' => ['callback' => '::ipSearchAjaxCallback'],
+    ];
+    $form['#attached']['library'][] = 'core/drupal.dialog.ajax';
 
     $form['countries_wrapper'] = [
       '#type' => 'fieldset',
@@ -302,6 +335,60 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
     ];
 
     return parent::buildForm($form, $form_state);
+  }
+
+  /**
+   * Looks up an IP without submitting the country settings form.
+   *
+   * @param array $form
+   *   The settings form.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The submitted form state.
+   */
+  public function submitIpSearch(array &$form, FormStateInterface $form_state): void {
+    $input = $form_state->getValue('ip_search_address', '');
+    $ip_input = new IpInput(is_string($input) ? trim($input) : '');
+    $form_state->set('ip_search_result', NULL);
+    $form_state->set('ip_search_error', NULL);
+    if (!$ip_input->isValid()) {
+      $form_state->set('ip_search_error', $this->t('Enter a valid IPv4 or IPv6 address.'));
+    }
+    else {
+      $this->countryService->hasAccess($ip_input);
+      $ip = $this->ipStorage->load($ip_input);
+      $form_state->set('ip_search_result', $ip);
+      if (!$ip) {
+        $form_state->set('ip_search_error', $this->t('The IP address could not be looked up or saved. Please try again.'));
+      }
+    }
+    $form_state->setRebuild();
+  }
+
+  /**
+   * Opens a one-row IP dialog or reports a failed search.
+   *
+   * @param array $form
+   *   The rebuilt settings form.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The form state containing the search result.
+   *
+   * @return \Drupal\Core\Ajax\AjaxResponse
+   *   The modal dialog or error message commands.
+   */
+  public function ipSearchAjaxCallback(array &$form, FormStateInterface $form_state): AjaxResponse {
+    $response = new AjaxResponse();
+    if ($error = $form_state->get('ip_search_error')) {
+      return $response->addCommand(new MessageCommand($error, NULL, ['type' => 'error']));
+    }
+    if ($ip = $form_state->get('ip_search_result')) {
+      $controller = FormController::create(\Drupal::getContainer());
+      $response->addCommand(new OpenModalDialogCommand(
+        $controller->countryDetailsTitle($ip->getCountryCode()),
+        $controller->buildIpTable([$ip]),
+        ['width' => 800],
+      ));
+    }
+    return $response;
   }
 
   /**

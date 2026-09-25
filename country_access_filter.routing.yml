@@ -10,7 +10,7 @@ country_access_filter.form.country.details:
   path: '/ajax/caf/details/{country}'
   defaults:
     _controller: '\Drupal\country_access_filter\Controller\FormController::countryDetailsAjaxCallback'
-    _title: 'Country IPs'
+    _title_callback: '\Drupal\country_access_filter\Controller\FormController::countryDetailsTitle'
   requirements:
     _permission: 'administer site configuration'
 country_access_filter.form.country.details.ip.access:

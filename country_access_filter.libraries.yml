@@ -12,3 +12,8 @@ country_picker:
   css:
     component:
       css/country-picker.css: { }
+
+ip_search:
+  css:
+    component:
+      css/ip-search.css: { }

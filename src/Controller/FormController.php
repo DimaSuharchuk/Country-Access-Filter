@@ -60,6 +60,33 @@ class FormController extends ControllerBase {
    *   The render array for the country IP table.
    */
   public function countryDetailsAjaxCallback(string $country): array {
+    return $this->buildIpTable($this->ipStorage->loadByCountry($country));
+  }
+
+  /**
+   * Gets the country name and code for an IP dialog title.
+   *
+   * @param string $country
+   *   The country code.
+   *
+   * @return \Drupal\Core\StringTranslation\TranslatableMarkup
+   *   The translated dialog title.
+   */
+  public function countryDetailsTitle(string $country): TranslatableMarkup {
+    $name = \Drupal::service('country_manager')->getList()[$country] ?? $this->t('Unknown country');
+    return $this->t('@country (@code) IPs', ['@country' => $name, '@code' => $country]);
+  }
+
+  /**
+   * Builds the shared IP table for country details and individual search results.
+   *
+   * @param \Drupal\country_access_filter\DTO\Ip[] $ips
+   *   The IP addresses to display.
+   *
+   * @return array
+   *   The IP table with the existing administrative actions.
+   */
+  public function buildIpTable(array $ips): array {
     $table = [
       '#theme' => 'table',
       '#header' => [
@@ -75,7 +102,7 @@ class FormController extends ControllerBase {
       ],
     ];
 
-    foreach ($this->ipStorage->loadByCountry($country) as $ip) {
+    foreach ($ips as $ip) {
       $table['#rows'][] = [
         'data' => [
           [
