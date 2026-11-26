@@ -60,9 +60,9 @@ final class SettingsFormTest extends AuditTestBase {
    */
   public function testCheckboxSubmission(): void {
     $this->submit(['countries' => ['UA' => 'UA', 'US' => 0, 'UG' => 0]]);
-    self::assertSame('UA', $this->container->get('config.factory')->get('country_access_filter.settings')->get('countries'));
+    self::assertSame('UA', $this->container->get('country_access_filter.settings')->get('countries'));
     $this->submit(['countries' => ['UA' => 0, 'US' => 0, 'UG' => 0]]);
-    self::assertSame('', $this->container->get('config.factory')->get('country_access_filter.settings')->get('countries'));
+    self::assertSame('', $this->container->get('country_access_filter.settings')->get('countries'));
   }
 
   /**

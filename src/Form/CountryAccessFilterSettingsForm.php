@@ -5,7 +5,7 @@ namespace Drupal\country_access_filter\Form;
 use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Ajax\MessageCommand;
 use Drupal\Core\Ajax\OpenModalDialogCommand;
-use Drupal\Core\Form\ConfigFormBase;
+use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Link;
 use Drupal\Core\Locale\CountryManagerInterface;
@@ -13,18 +13,21 @@ use Drupal\country_access_filter\AccessMode;
 use Drupal\country_access_filter\Controller\FormController;
 use Drupal\country_access_filter\DTO\IpInput;
 use Drupal\country_access_filter\Service\CountryService;
+use Drupal\country_access_filter\Service\Settings;
 use Drupal\country_access_filter\Service\storage\IpStorage;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Builds and validates the country access filter settings form.
  */
-class CountryAccessFilterSettingsForm extends ConfigFormBase {
+class CountryAccessFilterSettingsForm extends FormBase {
 
   /**
    * The service that provides the list of countries.
    */
   protected CountryManagerInterface $countries;
+
+  protected Settings $settings;
 
   /**
    * The service that evaluates country access rules.
@@ -53,22 +56,13 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
   public static function create(ContainerInterface $container): static {
     $instance = parent::create($container);
 
+    $instance->settings = $container->get('country_access_filter.settings');
     $instance->countries = $container->get('country_manager');
     $instance->countryService = $container->get('country_access_filter.country_service');
     $instance->ipStorage = $container->get('country_access_filter.ip_storage');
     $instance->ipController = FormController::create($container);
 
     return $instance;
-  }
-
-  /**
-   * {@inheritdoc}
-   *
-   * @return string[]
-   *   The configuration object edited by this form.
-   */
-  protected function getEditableConfigNames(): array {
-    return ['country_access_filter.settings'];
   }
 
   /**
@@ -93,7 +87,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
    *   The completed settings form.
    */
   public function buildForm(array $form, FormStateInterface $form_state): array {
-    $config = $this->config('country_access_filter.settings');
+    $config = $this->settings;
 
     $form['enabled'] = [
       '#type' => 'checkbox',
@@ -325,7 +319,13 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       ],
     ];
 
-    return parent::buildForm($form, $form_state);
+    $form['actions']['submit'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Save configuration'),
+      '#button_type' => 'primary',
+    ];
+
+    return $form;
   }
 
   /**
@@ -419,7 +419,7 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
    *   The submitted form state.
    */
   public function submitForm(array &$form, FormStateInterface $form_state): void {
-    $config = $this->config('country_access_filter.settings');
+    $config = $this->settings;
 
     $access_mode = $form_state->getValue('country_access_mode');
     $is_access_allowed = $access_mode == AccessMode::ALLOW->value;
@@ -432,15 +432,15 @@ class CountryAccessFilterSettingsForm extends ConfigFormBase {
       ->set('country_access_mode', $access_mode)
       ->set('track_404', $form_state->getValue('track_404'))
       ->set('track_404_threshold', $form_state->getValue('track_404_threshold'))
-      ->set('track_404_window', $form_state->getValue('track_404_window'))
-      ->save();
+      ->set('track_404_window', $form_state->getValue('track_404_window'));
 
     if (!$selected_countries && $is_access_allowed) {
       $this->messenger()
         ->addWarning($this->t('No country has been selected; the site will be available only to logged-in users with an active session.'));
     }
 
-    parent::submitForm($form, $form_state);
+    $this->countryService->synchronizeAccess($this->settings);
+    $this->messenger()->addStatus($this->t('The settings have been saved.'));
   }
 
 }

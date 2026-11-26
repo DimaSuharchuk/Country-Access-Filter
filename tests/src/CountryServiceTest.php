@@ -34,7 +34,7 @@ final class CountryServiceTest extends AuditTestBase {
     $countries = $this->createMock(CountryManagerInterface::class);
     $countries->method('getList')->willReturn(['UA' => 'Ukraine', 'US' => 'United States', 'UG' => 'Uganda']);
 
-    return new CountryService(new IpStorage($this->db), new Client(['handler' => HandlerStack::create($handler)]), new Json(), $this->configFactory($config), $countries, $logger ?? new \Psr\Log\NullLogger());
+    return new CountryService(new IpStorage($this->db), new Client(['handler' => HandlerStack::create($handler)]), new Json(), $this->settings($config), $countries, $logger ?? new \Psr\Log\NullLogger());
   }
 
   /**
@@ -111,18 +111,20 @@ final class CountryServiceTest extends AuditTestBase {
   }
 
   /**
-   * Tests config import changes previously learned decision.
+   * Tests config imports preserve policy and instance edits update decisions.
    */
-  public function testConfigImportChangesPreviouslyLearnedDecision(): void {
+  public function testConfigImportPreservesInstancePolicy(): void {
     $service = $this->configurePolicy();
     (new IpStorage($this->db))->save($this->ip());
     self::assertTrue($service->hasAccess(new IpInput('192.0.2.1')));
     self::assertTrue($service->isCountryAllowed('UA'));
-    // Config import saves Config objects and dispatches config.save without
-    // submitting the settings form.
     $this->container->get('config.factory')->getEditable('country_access_filter.settings')->set('countries', 'US')->save();
+    self::assertTrue($service->isCountryAllowed('UA'));
+    self::assertTrue($service->hasAccess(new IpInput('192.0.2.1')));
+    $this->container->get('country_access_filter.settings')->set('countries', 'US');
+    $service->synchronizeAccess($this->container->get('country_access_filter.settings'));
     self::assertFalse($service->isCountryAllowed('UA'));
-    self::assertFalse($service->hasAccess(new IpInput('192.0.2.1')), 'An IP learned under the old policy must follow imported configuration.');
+    self::assertFalse($service->hasAccess(new IpInput('192.0.2.1')), 'An IP learned under the old policy must follow instance settings.');
     self::assertFalse($this->storedAccess());
   }
 
@@ -136,7 +138,9 @@ final class CountryServiceTest extends AuditTestBase {
 
     self::assertFalse($service->hasAccess(new IpInput('192.0.2.1')));
 
-    $this->container->get('config.factory')->getEditable('country_access_filter.settings')->set('country_access_mode', 'deny')->save();
+    $this->container->get('country_access_filter.settings')->set('country_access_mode', 'deny');
+
+    $service->synchronizeAccess($this->container->get('country_access_filter.settings'));
 
     self::assertTrue($service->isCountryAllowed('US'));
     self::assertTrue($service->hasAccess(new IpInput('192.0.2.1')));

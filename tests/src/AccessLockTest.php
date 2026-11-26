@@ -25,17 +25,17 @@ final class AccessLockTest extends AuditTestBase {
     self::assertTrue($storage->deny($ip));
     self::assertTrue((new IpStorage($this->db))->load($input)->isAccessLocked());
     self::assertTrue($storage->loadByCountry('UA')[$input->getId()]->isAccessLocked());
-    $config = $this->container->get('config.factory')->getEditable('country_access_filter.settings');
-    $config->set('countries', 'UA US')->save();
+    $config = $this->container->get('country_access_filter.settings');
+    $config->set('countries', 'UA US');
     self::assertFalse($storage->load($input)->isAllowed());
     self::assertTrue($storage->allow($storage->load($input)));
-    $config->set('country_access_mode', 'deny')->save();
+    $config->set('country_access_mode', 'deny');
     self::assertTrue($storage->load($input)->isAllowed());
     self::assertTrue($storage->load($input)->isAccessLocked());
     self::assertTrue($storage->delete($storage->load($input)));
     self::assertNull($storage->load($input));
     self::assertTrue($storage->save($ip));
-    $config->save();
+    $this->container->get('country_access_filter.country_service')->synchronizeAccess($this->container->get('country_access_filter.settings'));
     self::assertFalse($storage->load($input)->isAllowed());
     self::assertFalse($storage->load($input)->isAccessLocked());
   }

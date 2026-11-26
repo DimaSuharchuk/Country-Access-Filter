@@ -5,8 +5,10 @@
  * Install, update, and uninstall functions for the module.
  */
 
+use Drupal\Core\Utility\UpdateException;
 use Drupal\country_access_filter\Service\CountryService;
 use Drupal\country_access_filter\AccessMode;
+use Drupal\country_access_filter\Service\Settings;
 
 /**
  * Implements hook_schema().
@@ -483,4 +485,26 @@ function country_access_filter_update_10011(): void {
 
     throw $exception;
   }
+}
+
+/**
+ * Preserves active instance settings before subsequent configuration imports.
+ */
+function country_access_filter_update_10012(): void {
+  $state = Drupal::state();
+  $key = Settings::KEY;
+
+  if ($state->get($key) !== NULL) {
+    return;
+  }
+
+  // Read active storage directly: never use sync YAML or config overrides.
+  $values = Drupal::service('config.storage')->read($key);
+
+  if ($values === FALSE) {
+    throw new UpdateException('Active country access settings are missing. Restore them before running this update.');
+  }
+
+  unset($values['_core'], $values['langcode']);
+  $state->set($key, $values + Settings::DEFAULTS);
 }

@@ -29,7 +29,7 @@ final class IpSearchTest extends AuditTestBase {
     $client = new Client(['handler' => HandlerStack::create($handler)]);
     $this->container->set('http_client', $client);
     $this->container->set('country_access_filter.country_service', new CountryService(
-      $storage, $client, new Json(), $this->container->get('config.factory'), $this->container->get('country_manager'), new \Psr\Log\NullLogger(),
+      $storage, $client, new Json(), $this->container->get('country_access_filter.settings'), $this->container->get('country_manager'), new \Psr\Log\NullLogger(),
     ));
     $instance = CountryAccessFilterSettingsForm::create($this->container);
     $form = [];
@@ -48,8 +48,8 @@ final class IpSearchTest extends AuditTestBase {
     self::assertFalse($ip->isAccessLocked());
     self::assertNotNull($storage->load(new IpInput('2001:db8::42')));
     self::assertCount(0, $handler);
-    self::assertSame('UA', $this->container->get('config.factory')->get('country_access_filter.settings')->get('countries'));
-    self::assertTrue($this->container->get('config.factory')->get('country_access_filter.settings')->get('enabled'));
+    self::assertSame('UA', $this->container->get('country_access_filter.settings')->get('countries'));
+    self::assertTrue($this->container->get('country_access_filter.settings')->get('enabled'));
     $controller = FormController::create($this->container);
     $table = $controller->buildIpTable([$ip]);
     self::assertCount(1, $table['#rows']);
@@ -68,7 +68,7 @@ final class IpSearchTest extends AuditTestBase {
     $handler = new MockHandler([new Response(503)]);
     $client = new Client(['handler' => HandlerStack::create($handler)]);
     $this->container->set('country_access_filter.country_service', new CountryService(
-      $storage, $client, new Json(), $this->container->get('config.factory'), $this->container->get('country_manager'), new \Psr\Log\NullLogger(),
+      $storage, $client, new Json(), $this->container->get('country_access_filter.settings'), $this->container->get('country_manager'), new \Psr\Log\NullLogger(),
     ));
     $instance = CountryAccessFilterSettingsForm::create($this->container);
     $form = [];

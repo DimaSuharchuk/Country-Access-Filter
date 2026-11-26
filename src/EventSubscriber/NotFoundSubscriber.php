@@ -2,12 +2,12 @@
 
 namespace Drupal\country_access_filter\EventSubscriber;
 
-use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
 use Drupal\country_access_filter\DTO\IpInput;
 use Drupal\country_access_filter\DTO\Tracked404;
+use Drupal\country_access_filter\Service\Settings;
 use Drupal\country_access_filter\Service\storage\IpStorage;
 use Drupal\country_access_filter\Service\storage\Tracker404Storage;
 use Exception;
@@ -30,8 +30,8 @@ class NotFoundSubscriber implements EventSubscriberInterface {
   /**
    * Constructs the 404 tracking event subscriber.
    *
-   * @param \Drupal\Core\Config\ConfigFactoryInterface $configFactory
-   *   The configuration factory.
+   * @param \Drupal\country_access_filter\Service\Settings $settings
+   *   The instance settings.
    * @param \Drupal\Core\Database\Connection $db
    *   The database connection.
    * @param \Symfony\Component\HttpFoundation\RequestStack $requestStack
@@ -44,7 +44,7 @@ class NotFoundSubscriber implements EventSubscriberInterface {
    *   The storage service for 404 tracking records.
    */
   public function __construct(
-    readonly protected ConfigFactoryInterface $configFactory,
+    readonly protected Settings $settings,
     readonly protected Connection $db,
     readonly protected RequestStack $requestStack,
     LoggerChannelFactoryInterface $logger,
@@ -74,7 +74,7 @@ class NotFoundSubscriber implements EventSubscriberInterface {
       return;
     }
 
-    $config = $this->configFactory->get('country_access_filter.settings');
+    $config = $this->settings;
 
     if (!$config->get('enabled') || !$config->get('track_404')) {
       return;

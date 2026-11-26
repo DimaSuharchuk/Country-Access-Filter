@@ -3,8 +3,6 @@
 namespace Drupal\country_access_filter\Service;
 
 use Drupal\Component\Serialization\SerializationInterface;
-use Drupal\Core\Config\ConfigBase;
-use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Locale\CountryManagerInterface;
 use Drupal\country_access_filter\AccessMode;
 use Drupal\country_access_filter\DTO\Ip;
@@ -37,8 +35,8 @@ class CountryService {
    *   The HTTP client for country lookup requests.
    * @param \Drupal\Component\Serialization\SerializationInterface $serialization
    *   The decoder for country lookup responses.
-   * @param \Drupal\Core\Config\ConfigFactoryInterface $configFactory
-   *   The configuration factory.
+   * @param \Drupal\country_access_filter\Service\Settings $settings
+   *   The instance settings.
    * @param \Drupal\Core\Locale\CountryManagerInterface $countryManager
    *   The service that provides the list of countries.
    * @param \Psr\Log\LoggerInterface $logger
@@ -48,7 +46,7 @@ class CountryService {
     protected IpStorage $ipStorage,
     protected ClientInterface $httpClient,
     protected SerializationInterface $serialization,
-    protected ConfigFactoryInterface $configFactory,
+    protected Settings $settings,
     protected CountryManagerInterface $countryManager,
     protected LoggerInterface $logger,
   ) {}
@@ -183,14 +181,14 @@ class CountryService {
   /**
    * Gets the countries allowed by the supplied or active access policy.
    *
-   * @param \Drupal\Core\Config\ConfigBase|null $config
+   * @param \Drupal\country_access_filter\Service\Settings|null $config
    *   The configuration to evaluate, or NULL to use active configuration.
    *
    * @return array
    *   Country codes keyed by their country code.
    */
-  public function getAllowedCountries(?ConfigBase $config = NULL): array {
-    $config ??= $this->configFactory->get('country_access_filter.settings');
+  public function getAllowedCountries(?Settings $config = NULL): array {
+    $config ??= $this->settings;
     $selected_countries = preg_split('/\s+/', trim((string) $config->get('countries')), -1, PREG_SPLIT_NO_EMPTY);
     $countries_allowed = $config->get('country_access_mode') === AccessMode::ALLOW->value ? $selected_countries : array_diff(array_keys($this->countryManager->getList()), $selected_countries);
 
@@ -200,10 +198,10 @@ class CountryService {
   /**
    * Applies country rules to stored IP addresses.
    *
-   * @param \Drupal\Core\Config\ConfigBase $config
+   * @param \Drupal\country_access_filter\Service\Settings $config
    *   The configuration containing the country access policy.
    */
-  public function synchronizeAccess(ConfigBase $config): void {
+  public function synchronizeAccess(Settings $config): void {
     $allowed = array_keys($this->getAllowedCountries($config));
     $denied = array_diff(array_keys($this->countryManager->getList()), $allowed);
 

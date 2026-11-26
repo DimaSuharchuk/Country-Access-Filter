@@ -2,11 +2,10 @@
 
 namespace Drupal\country_access_filter\EventSubscriber;
 
-use Drupal\Core\Config\ConfigFactoryInterface;
-use Drupal\Core\Config\ImmutableConfig;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\country_access_filter\DTO\IpInput;
 use Drupal\country_access_filter\Service\CountryService;
+use Drupal\country_access_filter\Service\Settings;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
@@ -18,15 +17,13 @@ use Symfony\Component\HttpKernel\KernelEvents;
  */
 class Subscriber implements EventSubscriberInterface {
 
-  protected ImmutableConfig $config;
-
   /**
    * Constructs the request event subscriber.
    *
    * @param \Symfony\Component\HttpFoundation\RequestStack $request
    *   The active request stack.
-   * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
-   *   The configuration factory.
+   * @param \Drupal\country_access_filter\Service\Settings $settings
+   *   The instance settings.
    * @param \Drupal\Core\Session\AccountInterface $user
    *   The current user account.
    * @param \Drupal\country_access_filter\Service\CountryService $countryService
@@ -34,12 +31,10 @@ class Subscriber implements EventSubscriberInterface {
    */
   public function __construct(
     protected RequestStack $request,
-    ConfigFactoryInterface $config_factory,
+    protected Settings $settings,
     protected AccountInterface $user,
     protected CountryService $countryService,
-  ) {
-    $this->config = $config_factory->get('country_access_filter.settings');
-  }
+  ) {}
 
   /**
    * {@inheritdoc}
@@ -59,7 +54,7 @@ class Subscriber implements EventSubscriberInterface {
   public function onKernelRequest(RequestEvent $event): void {
     // Only handle the main request, not sub-requests.
     if (
-      !$this->config->get('enabled')
+      !$this->settings->get('enabled')
       || !$event->isMainRequest()
       || $this->user->isAuthenticated()
     ) {

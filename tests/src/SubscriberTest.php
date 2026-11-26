@@ -62,7 +62,7 @@ final class SubscriberTest extends AuditTestBase {
 
     $factory = $this->createMock(LoggerChannelFactoryInterface::class);
     $factory->method('get')->willReturn($logger);
-    $subscriber = new NotFoundSubscriber($this->configFactory($config), $this->db, $stack, $factory, $ipStorage ?? new IpStorage($this->db), $trackerStorage ?? new Tracker404Storage($this->db));
+    $subscriber = new NotFoundSubscriber($this->settings($config), $this->db, $stack, $factory, $ipStorage ?? new IpStorage($this->db), $trackerStorage ?? new Tracker404Storage($this->db));
     $subscriber->onException(new ExceptionEvent($this->createMock(HttpKernelInterface::class), $request, $type, $exception ?? new NotFoundHttpException()));
   }
 
@@ -93,7 +93,7 @@ final class SubscriberTest extends AuditTestBase {
     self::assertSame('UA', (new IpStorage($this->db))->load(new IpInput('192.0.2.1'))->getCountryCode());
     self::assertTrue((new IpStorage($this->db))->load(new IpInput('192.0.2.1'))->isAccessLocked());
     $this->configurePolicy();
-    $this->container->get('config.factory')->getEditable('country_access_filter.settings')->save();
+    $this->container->get('country_access_filter.country_service')->synchronizeAccess($this->container->get('country_access_filter.settings'));
     self::assertFalse($this->storedAccess());
   }
 
@@ -262,7 +262,7 @@ final class SubscriberTest extends AuditTestBase {
     $service = $this->getMockBuilder(CountryService::class)->disableOriginalConstructor()->onlyMethods(['hasAccess'])->getMock();
     $service->expects($enabled && !$authenticated && $type === HttpKernelInterface::MAIN_REQUEST ? self::once() : self::never())->method('hasAccess')->willReturn($allowed);
     $event = new RequestEvent($this->createMock(HttpKernelInterface::class), $request, $type);
-    (new Subscriber($stack, $this->configFactory(['enabled' => $enabled]), $user, $service))->onKernelRequest($event);
+    (new Subscriber($stack, $this->settings(['enabled' => $enabled]), $user, $service))->onKernelRequest($event);
     self::assertSame($blocked, $event->hasResponse());
 
     if ($blocked) {

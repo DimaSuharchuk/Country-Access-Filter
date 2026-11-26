@@ -1,16 +1,13 @@
 services:
-  country_access_filter.config_subscriber:
-    class: Drupal\country_access_filter\EventSubscriber\ConfigSubscriber
-    arguments:
-      - '@country_access_filter.country_service'
-    tags:
-      - { name: event_subscriber }
+  country_access_filter.settings:
+    class: Drupal\country_access_filter\Service\Settings
+    arguments: ['@state']
 
   country_access_filter.event_subscriber:
     class: Drupal\country_access_filter\EventSubscriber\Subscriber
     arguments:
       - '@request_stack'
-      - '@config.factory'
+      - '@country_access_filter.settings'
       - '@current_user'
       - '@country_access_filter.country_service'
     tags:
@@ -19,7 +16,7 @@ services:
   country_access_filter.not_found_subscriber:
     class: Drupal\country_access_filter\EventSubscriber\NotFoundSubscriber
     arguments:
-      - '@config.factory'
+      - '@country_access_filter.settings'
       - '@database'
       - '@request_stack'
       - '@logger.factory'
@@ -34,7 +31,7 @@ services:
       - '@country_access_filter.ip_storage'
       - '@http_client'
       - '@serialization.json'
-      - '@config.factory'
+      - '@country_access_filter.settings'
       - '@country_manager'
       - '@logger.channel.country_access_filter'
 

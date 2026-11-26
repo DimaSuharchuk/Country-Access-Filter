@@ -2,8 +2,6 @@
 
 namespace Drupal\Tests\country_access_filter;
 
-use Drupal\Core\Config\ConfigFactoryInterface;
-use Drupal\Core\Config\ImmutableConfig;
 use Drupal\Core\Database\Database;
 use Drupal\Core\DependencyInjection\ContainerBuilder;
 use Drupal\Core\Site\Settings;
@@ -53,12 +51,15 @@ abstract class AuditTestBase extends TestCase {
     $countries = $this->createMock(\Drupal\Core\Locale\CountryManagerInterface::class);
     $countries->method('getList')->willReturn(['UA' => 'Ukraine', 'US' => 'United States', 'UG' => 'Uganda']);
     $ipStorage = new IpStorage($this->db);
+    $settings = $this->settings($values);
+    $this->container->set('country_access_filter.settings', $settings);
     $service = new \Drupal\country_access_filter\Service\CountryService(
       $ipStorage,
       new \GuzzleHttp\Client(['handler' => \GuzzleHttp\HandlerStack::create(new \GuzzleHttp\Handler\MockHandler([]))]),
-      new \Drupal\Component\Serialization\Json(), $factory, $countries, new \Psr\Log\NullLogger(),
+      new \Drupal\Component\Serialization\Json(), $settings, $countries, new \Psr\Log\NullLogger(),
     );
-    $dispatcher->addSubscriber(new \Drupal\country_access_filter\EventSubscriber\ConfigSubscriber($service));
+
+    $this->container->set('config.storage', $storage);
     $this->container->set('config.factory', $factory);
     $this->container->set('config.typed', $typed);
     $this->container->set('country_manager', $countries);
@@ -108,22 +109,20 @@ abstract class AuditTestBase extends TestCase {
   }
 
   /**
-   * Creates a mocked factory for module configuration.
-   *
-   * @param array $values
-   *   The configuration values returned by the factory.
-   *
-   * @return \Drupal\Core\Config\ConfigFactoryInterface
-   *   The mocked configuration factory.
+   * Creates isolated instance settings.
    */
-  protected function configFactory(array $values = []): ConfigFactoryInterface {
-    $values += ['enabled' => TRUE, 'countries' => 'UA', 'country_access_mode' => 'allow', 'track_404' => TRUE, 'track_404_threshold' => 5, 'track_404_window' => 3600];
-    $config = $this->getMockBuilder(ImmutableConfig::class)->disableOriginalConstructor()->onlyMethods(['get'])->getMock();
-    $config->method('get')->willReturnCallback(fn($key) => $values[$key] ?? NULL);
-    $factory = $this->createMock(ConfigFactoryInterface::class);
-    $factory->method('get')->willReturn($config);
+  protected function settings(array $values = []): \Drupal\country_access_filter\Service\Settings {
+    $data = ['country_access_filter.settings' => $values + ['track_404' => TRUE] + \Drupal\country_access_filter\Service\Settings::DEFAULTS];
+    $state = $this->createMock(\Drupal\Core\State\StateInterface::class);
+    $state->method('get')->willReturnCallback(function ($key, $default = NULL) use (&$data) {
+      return $data[$key] ?? $default;
+    });
+    $state->method('set')->willReturnCallback(function ($key, $value) use (&$data) {
+      $data[$key] = $value;
+    });
+    $this->container->set('state', $state);
 
-    return $factory;
+    return new \Drupal\country_access_filter\Service\Settings($state);
   }
 
   /**
